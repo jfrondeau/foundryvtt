@@ -31,6 +31,20 @@ const CONFIG_HP = {
   // true  = un nombre sans signe est un SOIN  (+10)  [défaut]
   // false = un nombre sans signe est un DÉGÂT (-10), forcer +10 pour soigner
   unsignedIsHeal: true,
+
+  // Tint progressif vers le rouge à partir du seuil bloodied (50% HP par défaut)
+  // true  = activer le tint rouge progressif
+  // false = désactiver
+  bloodiedTint: true,
+  bloodiedThreshold: 0.5,   // seuil bloodied (0.5 = 50% HP restant)
+  tintColorFull: "#ffffff",  // couleur à HP plein (blanc = aucun tint)
+  tintColorDead: "#ff0000",  // couleur cible à 0 HP
+
+  // Rotation du token quand HP < 1
+  // true  = coucher le token à 90°
+  // false = désactiver
+  rotateOnDeath: true,
+  deathRotation: 90,         // degrés (90 = couché sur le côté)
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -175,6 +189,67 @@ async function setDeadStatus(token, active) {
   }
 }
 
+// ─── HELPERS TINT & ROTATION ─────────────────────────────────────────────────
+
+/**
+ * Interpole entre deux couleurs hex selon t ∈ [0, 1].
+ * t=0 → colorA, t=1 → colorB
+ */
+function lerpColor(colorA, colorB, t) {
+  const hex = (str) => [
+    parseInt(str.slice(1, 3), 16),
+    parseInt(str.slice(3, 5), 16),
+    parseInt(str.slice(5, 7), 16),
+  ];
+  const [ar, ag, ab] = hex(colorA);
+  const [br, bg, bb] = hex(colorB);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const b = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+}
+
+/**
+ * Calcule et applique le tint + la rotation selon les HP restants.
+ * Appelé après chaque mise à jour de HP.
+ */
+async function updateTokenVisuals(token, newHP, maxHP) {
+  const updates = {};
+
+  // ── Tint ────────────────────────────────────────────────────────────────────
+  if (CONFIG_HP.bloodiedTint && maxHP > 0) {
+    const ratio = newHP / maxHP; // 0.0 → 1.0
+
+    let tint;
+    if (ratio >= CONFIG_HP.bloodiedThreshold) {
+      // HP plein ou au-dessus du seuil bloodied → pas de tint
+      tint = CONFIG_HP.tintColorFull;
+    } else {
+      // Entre bloodied et 0 → interpoler du tintColorFull vers tintColorDead
+      const t = 1 - (ratio / CONFIG_HP.bloodiedThreshold); // 0 à bloodied, 1 à 0 HP
+      tint = lerpColor(CONFIG_HP.tintColorFull, CONFIG_HP.tintColorDead, t);
+    }
+
+    updates["texture.tint"] = tint;
+  }
+
+  // ── Rotation ────────────────────────────────────────────────────────────────
+  if (CONFIG_HP.rotateOnDeath) {
+    if (newHP < 1) {
+      updates.rotation = CONFIG_HP.deathRotation;
+    } else {
+      // Annuler la rotation de mort si le token a été soigné
+      if (token.document.rotation === CONFIG_HP.deathRotation) {
+        updates.rotation = token.document.rotation - CONFIG_HP.deathRotation;
+      }
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await token.document.update(updates);
+  }
+}
+
 // ─── LOGIQUE D'APPLICATION ───────────────────────────────────────────────────
 async function applyHpChange(html) {
   const rawValue = html.find("#hp-delta").val().trim();
@@ -223,6 +298,10 @@ async function applyHpChange(html) {
     if (CONFIG_HP.clampToMax && maxHP != null) newHP = Math.min(maxHP, newHP);
 
     await actor.update({ [CONFIG_HP.hpPath]: newHP });
+
+    // ── Visuels token (tint + rotation) ─────────────────────────────────────
+    await updateTokenVisuals(token, newHP, maxHP ?? 0);
+    // ────────────────────────────────────────────────────────────────────────
 
     const sign = delta > 0 ? "+" : "";
     log.push(`${token.name}: ${currentHP} → ${newHP} (${sign}${delta})`);
