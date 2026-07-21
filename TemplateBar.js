@@ -12,10 +12,11 @@
  * Le joueur dessine ensuite normalement (clic-glisser = dimensionner), exactement
  * comme quand on utilise le mode gabarit natif de la barre d'outils.
  *
- * Chaque gabarit dessiné est une Region nommée « … [NomDuJoueur] ». La poubelle
- * s'appuie sur ce suffixe :
- *   - Joueur → supprime uniquement les gabarits portant SON nom entre crochets.
- *   - MJ     → supprime tous les gabarits (regions finissant par « [… ] »),
+ * Chaque gabarit dessiné est une Region renommée selon sa forme (« Cercle [Nom] »,
+ * « Cône [Nom] », …) et marquée d'un flag d'appartenance (flags.templateBar.owner).
+ * La poubelle s'appuie sur ce flag (fiable, indépendant du nom) :
+ *   - Joueur → supprime uniquement SES gabarits.
+ *   - MJ     → supprime tous les gabarits de tous les joueurs,
  *              sans toucher aux vraies regions de la scène.
  *
  * Après avoir posé un gabarit, la couche active revient automatiquement à la
@@ -179,6 +180,9 @@ function initDrag(handle) {
 // Couche à restaurer une fois le gabarit dessiné (défaut : couche des tokens).
 let returnLayer = null;
 
+// Dernière forme activée depuis la barre — sert à nommer la region créée.
+let lastShape = null;
+
 // ── Activation du mode gabarit (contrôle Regions + toggle templateMode) ───────
 // Reproduit exactement le geste manuel confirmé :
 //   1) ouvrir Regions, 2) activer templateMode, 3) choisir la forme.
@@ -189,6 +193,9 @@ async function activateTool(shape) {
   // Mémorise la couche courante pour y revenir après le dessin.
   const current = canvas.activeLayer;
   if (current && current !== canvas.regions) returnLayer = current;
+
+  // Mémorise la forme pour nommer la region à la création.
+  lastShape = shape;
 
   // 1) Ouvre le contrôle Regions.
   await ui.controls.activate({ control: "regions", tool: "select" });
@@ -223,14 +230,18 @@ async function clearMine() {
   const scene = canvas.scene;
   if (!scene) return;
 
-  // Les gabarits sont des regions nommées « … [NomUtilisateur] ».
-  const endsWithTag = (r) => /\[[^\]]+\]\s*$/.test(r.name ?? "");            // une region-gabarit
+  // Marqueur fiable posé à la création (flag), avec repli sur l'ancien nom « … [Nom] »
+  // pour les gabarits dessinés avant l'ajout du flag.
+  const myId  = game.user.id;
   const myTag = `[${game.user.name}]`;
-  const isMine = (r) => (r.name ?? "").includes(myTag);                       // la mienne
+  const flagOwner  = (r) => r.flags?.[NS]?.owner;                             // id de l'auteur
+  const endsWithTag = (r) => /\[[^\]]+\]\s*$/.test(r.name ?? "");             // repli : nom balisé
+  const isTemplate = (r) => flagOwner(r) != null || endsWithTag(r);          // une region-gabarit
+  const isMine     = (r) => flagOwner(r) === myId || (r.name ?? "").includes(myTag);
 
   // MJ : tous les gabarits de tous les joueurs. Joueur : uniquement les siens.
   const ids = scene.regions
-    .filter(r => game.user.isGM ? endsWithTag(r) : isMine(r))
+    .filter(r => game.user.isGM ? isTemplate(r) : isMine(r))
     .map(r => r.id);
 
   if (!ids.length) {
@@ -312,6 +323,29 @@ const hookIds = {};
 hookIds.createRegion = Hooks.on("createRegion", (doc, options, userId) => {
   if (userId !== game.user.id) return;
   setTimeout(() => restoreLayer(), 50);
+});
+
+// ── Baptême + marquage des gabarits à la création ────────────────────────────
+// Avant que la region soit créée, on la renomme selon la forme (« Cercle [Nom] »,
+// « Cône [Nom] », …) et on y pose un flag d'appartenance. Le flag rend la
+// suppression fiable (indépendante du nom, y compris côté MJ).
+hookIds.preCreateRegion = Hooks.on("preCreateRegion", (doc, data, options, userId) => {
+  if (userId !== game.user.id) return;
+  // Ne cible que les regions dessinées en mode gabarit (pas les vraies regions).
+  if (!ui.controls.controls?.regions?.tools?.templateMode?.active) return;
+
+  // En mode gabarit, l'outil actif reste « select » : on se fie à la forme
+  // cliquée sur la barre (lastShape), et on n'utilise activeTool que s'il
+  // désigne réellement une forme connue.
+  const activeTool = ui.controls.control?.activeTool;
+  const toolName = SHAPES.some(s => s.t === activeTool) ? activeTool : lastShape;
+  const label = SHAPES.find(s => s.t === toolName)?.label ?? "Gabarit";
+
+  // Nom = forme suivie du propriétaire entre crochets, ex. « Cercle [Nom] ».
+  doc.updateSource({
+    name: `${label} [${game.user.name}]`,
+    flags: { [NS]: { owner: game.user.id, ownerName: game.user.name } },
+  });
 });
 
 // ── API globale + destruction propre ─────────────────────────────────────────
