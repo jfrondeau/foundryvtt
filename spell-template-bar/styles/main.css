@@ -1,0 +1,71 @@
+/* ── Barre de gabarits ──────────────────────────────────────────────────────── */
+#spell-template-bar {
+  --tb-btn: 40px;
+  position: fixed; z-index: 70;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid #7a7a7a; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: all; user-select: none;
+}
+
+#spell-template-bar .tb-handle {
+  flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#spell-template-bar .tb-handle:hover { color: #fff; }
+#spell-template-bar .tb-handle:active { cursor: grabbing; color: #ff6400; }
+
+#spell-template-bar .tb-label {
+  font-size: 11px; color: #ddd; font-weight: bold; white-space: nowrap; margin-right: 2px;
+}
+
+#spell-template-bar .tb-btn {
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: var(--tb-btn); height: var(--tb-btn); color: #eee;
+  border: 2px solid #4a90d9; border-radius: 4px; cursor: pointer;
+  background: rgba(74, 144, 217, 0.15); transition: all .1s ease;
+}
+#spell-template-bar .tb-btn:hover {
+  border-color: #7ec8ff; background: rgba(126, 200, 255, 0.3);
+  color: #fff; transform: translateY(-2px);
+}
+#spell-template-bar .tb-btn.tb-active {
+  border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
+}
+#spell-template-bar .tb-btn i { font-size: 16px; pointer-events: none; }
+
+#spell-template-bar .tb-trash {
+  border-color: #b5484a; background: rgba(181, 72, 74, 0.15);
+}
+#spell-template-bar .tb-trash:hover { border-color: #ff7e7e; background: rgba(255, 126, 126, 0.3); }
+
+#spell-template-bar .tb-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
+
+#spell-template-bar .tb-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  color: #ccc; border: 1px solid #666; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+#spell-template-bar .tb-toggle:hover { color: #fff; border-color: #ff6400; }
+
+/* ── État minimisé : ne reste que la poignée + le toggle ─────────────────────── */
+#spell-template-bar.stb-collapsed { gap: 2px; padding: 3px 5px; }
+#spell-template-bar.stb-collapsed .tb-collapsible { display: none; }
+
+/* ── Mode immersif : masque le reste de l'interface (canvas + barre conservés) ── */
+body.stb-immersive #ui-top,
+body.stb-immersive #ui-left,
+body.stb-immersive #ui-right,
+body.stb-immersive #ui-bottom,
+body.stb-immersive #navigation,
+body.stb-immersive #controls,
+body.stb-immersive #scene-controls,
+body.stb-immersive #players,
+body.stb-immersive #players-active,
+body.stb-immersive #hotbar,
+body.stb-immersive #sidebar,
+body.stb-immersive #logo {
+  display: none !important;
+}

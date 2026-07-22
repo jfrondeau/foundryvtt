@@ -1,0 +1,24 @@
+{
+  "id": "spell-template-bar",
+  "title": "Spell Template Bar",
+  "description": "Barre flottante de gabarits de sort (via le mode gabarit Regions de dnd5e), affichée automatiquement pour tous les joueurs, avec un mode immersif masquant le reste de l'interface.",
+  "version": "1.0.0",
+  "authors": [
+    { "name": "jfrondeau" }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/main.css"
+  ],
+  "compatibility": {
+    "minimum": "13",
+    "verified": "14"
+  },
+  "relationships": {
+    "systems": [
+      { "id": "dnd5e", "type": "system", "compatibility": { "minimum": "5" } }
+    ]
+  }
+}
