@@ -97,8 +97,9 @@ class SpellTemplateBar {
 
   constructor() {
     this.bar = null;
-    this.returnLayer = null;   // couche à restaurer après le dessin
-    this.lastShape = null;     // dernière forme activée (sert au nommage)
+    this.returnLayer = null;      // couche à restaurer après le dessin
+    this.lastShape = null;        // dernière forme activée (sert au nommage)
+    this.emanationTokenId = null; // token auquel attacher la prochaine émanation
     this.hookIds = {};
     this.onResize = this.onResize.bind(this);
   }
@@ -135,7 +136,7 @@ class SpellTemplateBar {
       btn.dataset.shape = shape.t;
       btn.dataset.tooltip = `${shape.label} — clic-glisser pour dimensionner`;
       const i = document.createElement("i");
-      i.className = `fas ${shape.icon}`;
+      i.className = this.shapeIcon(shape);
       btn.appendChild(i);
       btn.addEventListener("click", (ev) => { ev.preventDefault(); this.activateTool(shape.t); });
       bar.appendChild(btn);
@@ -176,7 +177,33 @@ class SpellTemplateBar {
 
     window.addEventListener("resize", this.onResize);
     this.registerHooks();
+    this.refreshEmanationState();
     notify.info("Barre de gabarits prête.");
+  }
+
+  /** Icône du bouton : reprend celle de l'outil du contrôle « Regions » de dnd5e. */
+  shapeIcon(shape) {
+    const toolIcon = ui.controls.controls?.regions?.tools?.[shape.t]?.icon;
+    return (typeof toolIcon === "string" && toolIcon.trim()) ? toolIcon : `fas ${shape.icon}`;
+  }
+
+  /** Re-synchronise les icônes des boutons sur celles du contrôle Regions. */
+  refreshIcons() {
+    for (const shape of SHAPES) {
+      const i = this.bar?.querySelector(`.tb-btn[data-shape="${shape.t}"] > i`);
+      if (i) i.className = this.shapeIcon(shape);
+    }
+  }
+
+  /** Active/désactive le bouton Émanation : il exige exactement UN token sélectionné. */
+  refreshEmanationState() {
+    const btn = this.bar?.querySelector('.tb-btn[data-shape="emanation"]');
+    if (!btn) return;
+    const ready = canvas.tokens?.controlled?.length === 1;
+    btn.classList.toggle("tb-disabled", !ready);
+    btn.dataset.tooltip = ready
+      ? "Émanation — attachée au token sélectionné"
+      : "Émanation — sélectionner d'abord un token";
   }
 
   applyButtonSize() {
@@ -260,6 +287,20 @@ class SpellTemplateBar {
 
   // ── Activation du mode gabarit ─────────────────────────────────────────────
   async activateTool(shape) {
+    // L'émanation se dessine comme les autres formes ; la région créée sera
+    // simplement attachée au token sélectionné (voir preCreateRegion). On mémorise
+    // ce token dès le clic. Le bouton est désactivé sans sélection, mais on garde
+    // cette garde par sécurité.
+    this.emanationTokenId = null;
+    if (shape === "emanation") {
+      const controlled = canvas.tokens.controlled;
+      if (controlled.length !== 1) {
+        notify.warn("Sélectionner exactement UN token pour attacher l'émanation.");
+        return;
+      }
+      this.emanationTokenId = controlled[0].id;
+    }
+
     const regions = ui.controls.controls?.regions;
     if (!regions) { notify.warn("Contrôle « Regions » indisponible sur cette scène."); return; }
 
@@ -327,8 +368,16 @@ class SpellTemplateBar {
     // la propagation du placeable pendant _onCreate).
     this.hookIds.createRegion = Hooks.on("createRegion", (doc, options, userId) => {
       if (userId !== game.user.id) return;
+      this.emanationTokenId = null;
       setTimeout(() => this.restoreLayer(), 50);
     });
+
+    // Le bouton Émanation suit la sélection de tokens (actif si exactement un).
+    this.hookIds.controlToken = Hooks.on("controlToken", () => this.refreshEmanationState());
+
+    // Filet de sécurité : re-synchronise les icônes dès que les outils Regions
+    // sont disponibles (elles peuvent ne pas l'être au tout premier rendu).
+    this.hookIds.renderSceneControls = Hooks.on("renderSceneControls", () => this.refreshIcons());
 
     // Baptême + marquage à la création : renomme « <Forme> [Nom] » et pose le flag.
     this.hookIds.preCreateRegion = Hooks.on("preCreateRegion", (doc, data, options, userId) => {
@@ -341,10 +390,18 @@ class SpellTemplateBar {
       const toolName = SHAPES.some(s => s.t === activeTool) ? activeTool : this.lastShape;
       const label = SHAPES.find(s => s.t === toolName)?.label ?? "Gabarit";
 
-      doc.updateSource({
+      const update = {
         name: `${label} [${game.user.name}]`,
         flags: { [NS]: { owner: game.user.id, ownerName: game.user.name } },
-      });
+      };
+
+      // Émanation : on attache la région au token sélectionné pour qu'elle le
+      // suive et tourne avec lui (identique à ce que produit createTokenEmanation).
+      if (toolName === "emanation" && this.emanationTokenId) {
+        update.attachment = { token: this.emanationTokenId };
+      }
+
+      doc.updateSource(update);
     });
   }
 
