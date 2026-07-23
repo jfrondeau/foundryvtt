@@ -58,14 +58,26 @@ Hooks.once("init", () => {
     onChange: () => SpellTemplateBar.instance?.applyButtonSize(),
   });
 
-  game.settings.register(MODULE_ID, "immersive", {
-    name: "Mode immersif (masquer l'interface des joueurs)",
-    hint: "Réservé au MJ. Masque la navigation, les contrôles, la liste des joueurs, la hotbar, la sidebar et le logo — pour les JOUEURS uniquement. Le MJ conserve son interface complète.",
+  // Toggle maître : masque l'interface des JOUEURS (le MJ garde la sienne).
+  game.settings.register(MODULE_ID, "hidePlayerHud", {
+    name: "Hide player HUD — masquer l'interface des joueurs",
+    hint: "Réservé au MJ. Pour les JOUEURS uniquement : ne conserve que le canvas et cette barre. Le MJ garde son interface complète.",
     scope: "world",
     config: true,
     type: Boolean,
     default: false,
-    onChange: () => SpellTemplateBar.applyImmersive(),
+    onChange: () => SpellTemplateBar.applyHidePlayerHud(),
+  });
+
+  // Seule exception configurable : conserver le chat (chat-scroll), sans sa saisie.
+  game.settings.register(MODULE_ID, "showChat", {
+    name: "Chat",
+    hint: "Conserver le journal de chat (chat-scroll) visible pour les joueurs quand l'interface est masquée. Le champ de saisie (chat-form) reste masqué.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => SpellTemplateBar.applyHidePlayerHud(),
   });
 });
 
@@ -80,7 +92,7 @@ Hooks.once("ready", () => {
   }
   SpellTemplateBar.instance = new SpellTemplateBar();
   SpellTemplateBar.instance.render();
-  SpellTemplateBar.applyImmersive();
+  SpellTemplateBar.applyHidePlayerHud();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -89,10 +101,23 @@ Hooks.once("ready", () => {
 class SpellTemplateBar {
   static instance = null;
 
-  /** Applique / retire le mode immersif selon le réglage monde (joueurs seulement). */
-  static applyImmersive() {
-    const on = !!game.settings.get(MODULE_ID, "immersive") && !game.user.isGM;
-    document.body.classList.toggle("stb-immersive", on);
+  /**
+   * Masque l'interface des joueurs selon les réglages monde (joueurs seulement).
+   * Pose deux classes repère sur <body>, exploitées par la feuille de style :
+   *  - stb-hide-hud  : masque toute l'interface (canvas + barre conservés) ;
+   *  - stb-show-chat : exception « Chat » — garde .chat-scroll dans la sidebar
+   *                    tout en masquant .chat-form (classes, pas des id en v14).
+   */
+  static applyHidePlayerHud() {
+    const active   = !!game.settings.get(MODULE_ID, "hidePlayerHud") && !game.user.isGM;
+    const showChat = !!game.settings.get(MODULE_ID, "showChat");
+    document.body.classList.toggle("stb-hide-hud", active);
+    document.body.classList.toggle("stb-show-chat", active && showChat);
+
+    // Best-effort : garder l'onglet Chat actif pour que #chat-scroll reste affiché.
+    if (active && showChat) {
+      try { ui.sidebar?.changeTab?.("chat", "primary"); } catch (_) { /* API variable selon version */ }
+    }
   }
 
   constructor() {

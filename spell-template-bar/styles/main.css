@@ -58,18 +58,34 @@
 #spell-template-bar.stb-collapsed { gap: 2px; padding: 3px 5px; }
 #spell-template-bar.stb-collapsed .tb-collapsible { display: none; }
 
-/* ── Mode immersif : masque le reste de l'interface (canvas + barre conservés) ── */
-body.stb-immersive #ui-top,
-body.stb-immersive #ui-left,
-body.stb-immersive #ui-right,
-body.stb-immersive #ui-bottom,
-body.stb-immersive #navigation,
-body.stb-immersive #controls,
-body.stb-immersive #scene-controls,
-body.stb-immersive #players,
-body.stb-immersive #players-active,
-body.stb-immersive #hotbar,
-body.stb-immersive #sidebar,
-body.stb-immersive #logo {
+/* ── Hide player HUD : masque toute l'interface des joueurs ──────────────────── */
+body.stb-hide-hud #ui-top,
+body.stb-hide-hud #ui-left,
+body.stb-hide-hud #ui-bottom,
+body.stb-hide-hud #navigation,
+body.stb-hide-hud #controls,
+body.stb-hide-hud #scene-controls,
+body.stb-hide-hud #players,
+body.stb-hide-hud #players-active,
+body.stb-hide-hud #hotbar,
+body.stb-hide-hud #logo {
+  display: none !important;
+}
+
+/* Sans l'exception « Chat » : la sidebar entière est masquée aussi. */
+body.stb-hide-hud:not(.stb-show-chat) #ui-right,
+body.stb-hide-hud:not(.stb-show-chat) #sidebar {
+  display: none !important;
+}
+
+/* Avec l'exception « Chat » : la sidebar reste, mais on ne garde que le journal
+   de chat. NB : chat-scroll / chat-form sont des CLASSES en v14 (pas des id).
+   On masque toute la zone de saisie (.chat-form contient #chat-controls, les
+   modes de message et l'éditeur ProseMirror) + la navigation d'onglets ;
+   .chat-scroll reste visible. */
+body.stb-hide-hud.stb-show-chat .chat-form,
+body.stb-hide-hud.stb-show-chat #sidebar-tabs,
+body.stb-hide-hud.stb-show-chat #sidebar nav.tabs,
+body.stb-hide-hud.stb-show-chat #sidebar menu.tabs {
   display: none !important;
 }
