@@ -78,14 +78,30 @@ body.stb-hide-hud:not(.stb-show-chat) #sidebar {
   display: none !important;
 }
 
-/* Avec l'exception « Chat » : la sidebar reste, mais on ne garde que le journal
-   de chat. NB : chat-scroll / chat-form sont des CLASSES en v14 (pas des id).
-   On masque toute la zone de saisie (.chat-form contient #chat-controls, les
-   modes de message et l'éditeur ProseMirror) + la navigation d'onglets ;
-   .chat-scroll reste visible. */
-body.stb-hide-hud.stb-show-chat .chat-form,
-body.stb-hide-hud.stb-show-chat #sidebar-tabs,
-body.stb-hide-hud.stb-show-chat #sidebar nav.tabs,
-body.stb-hide-hud.stb-show-chat #sidebar menu.tabs {
+/* Avec l'exception « Chat » : la sidebar reste. On masque la zone de saisie
+   (.chat-form contient #chat-controls, les modes de message et l'éditeur
+   ProseMirror). NB : chat-scroll / chat-form sont des CLASSES en v14. */
+body.stb-hide-hud.stb-show-chat .chat-form {
   display: none !important;
+}
+
+/* La zone de saisie ne doit jamais apparaître pour un joueur au HUD masqué — ni
+   dans la sidebar, ni dans la fenêtre flottante #chat-notifications (affichée
+   quand la sidebar est repliée). #chat-message = éditeur ProseMirror. */
+body.stb-hide-hud #chat-message,
+body.stb-hide-hud #chat-controls {
+  display: none !important;
+}
+
+/* Barre d'onglets de la sidebar : on ne garde que le bouton Chat et le toggle
+   d'ouverture/fermeture ; tous les autres onglets sont masqués. Le joueur peut
+   ainsi ouvrir/fermer la sidebar lui-même pour lire le chat. */
+body.stb-hide-hud.stb-show-chat #sidebar-tabs menu > li:not(:has(button[data-tab="chat"])):not(:has(button[data-action="toggleState"])) {
+  display: none !important;
+}
+
+/* Côté joueur, le chat isolé reste complètement transparent (défaut Foundry) :
+   seules les bulles de message flottent au-dessus de la scène. */
+body.stb-hide-hud.stb-show-chat #sidebar-content #chat {
+  background: transparent !important;
 }
