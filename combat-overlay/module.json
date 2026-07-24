@@ -1,0 +1,24 @@
+{
+  "id": "combat-overlay",
+  "title": "Combat Overlay",
+  "description": "Suivi de combat compact, superposé à la scène et visible sur la table. Affiché automatiquement dès qu'un combat est actif : liste des participants (portrait ou token), PJ et monstres distingués, marqueur sur le combattant courant dont le token est sélectionné/centré, manche + initiative de tous. Boutons MJ pour rouler l'initiative des monstres et saisir manuellement celle des PJ. Raccourci « . » pour passer au tour suivant.",
+  "version": "1.0.0",
+  "authors": [
+    { "name": "jfrondeau" }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/main.css"
+  ],
+  "compatibility": {
+    "minimum": "13",
+    "verified": "14"
+  },
+  "relationships": {
+    "systems": [
+      { "id": "dnd5e", "type": "system", "compatibility": { "minimum": "5" } }
+    ]
+  }
+}
