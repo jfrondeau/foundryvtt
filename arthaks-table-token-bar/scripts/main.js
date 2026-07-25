@@ -34,6 +34,18 @@ const notify = {
   warn: (m) => { console.warn(`[Token Bar] ${m}`); ui.notifications?.warn(m); },
 };
 
+/** Ouvre les réglages en se plaçant directement sur la catégorie de CE module. */
+async function openModuleSettings() {
+  const app = game.settings?.sheet;
+  if (!app) return;
+  await app.render({ force: true });
+  await new Promise((r) => requestAnimationFrame(r));
+  try { app.changeTab(MODULE_ID, "categories"); return; }
+  catch (e) { console.warn("[Token Bar] settings:", e); }
+  // Repli DOM : clique l'entrée de catégorie du module.
+  app.element?.querySelector?.(`[data-tab="${MODULE_ID}"], [data-category="${MODULE_ID}"]`)?.click?.();
+}
+
 // Configuration vivante, rafraîchie depuis les réglages à chaque rendu.
 let CFG = {};
 
@@ -328,6 +340,7 @@ class TokenActionBar {
   constructor() {
     this.bar = null;
     this.hookIds = {};
+    this._activeActorId = null;     // acteur actuellement affiché (rafraîchissement ciblé)
     this.onResize = this.onResize.bind(this);
   }
 
@@ -350,8 +363,7 @@ class TokenActionBar {
   registerHooks() {
     this.hookIds.controlToken = Hooks.on("controlToken", () => this.render());
     const refreshOnItem = (item) => {
-      const actorId = canvas.tokens?.controlled?.[0]?.actor?.id;
-      if (item?.parent?.id && item.parent.id === actorId) this.render();
+      if (item?.parent?.id && item.parent.id === this._activeActorId) this.render();
     };
     this.hookIds.createItem = Hooks.on("createItem", refreshOnItem);
     this.hookIds.updateItem = Hooks.on("updateItem", refreshOnItem);
@@ -382,19 +394,33 @@ class TokenActionBar {
     };
   }
 
+  /**
+   * Token dont on affiche les actions : exactement UN token sélectionné dont on
+   * a la PERMISSION (`actor.isOwner`). Aucune mémorisation.
+   *  - MJ : possède tout → la barre s'affiche pour tout token sélectionné (monstre inclus).
+   *  - Joueur : uniquement ses tokens ; sur un token non permis (ou aucune/plusieurs
+   *    sélections), la barre disparaît.
+   */
+  resolveToken() {
+    const controlled = canvas.tokens?.controlled ?? [];
+    const sole = controlled.length === 1 ? controlled[0] : null;
+    return sole?.actor?.isOwner ? sole : null;
+  }
+
   // ── Rendu ──────────────────────────────────────────────────────────────────
   render() {
     this.readCfg();
-    const controlled = canvas.tokens?.controlled ?? [];
+    const token = this.resolveToken();
     this.bar.replaceChildren();
 
-    if (controlled.length !== 1 || !controlled[0].actor) {
+    if (!token) {
+      this._activeActorId = null;
       this.bar.style.display = "none";
       return;
     }
 
-    const token = controlled[0];
     const actor = token.actor;
+    this._activeActorId = actor.id;
     this.bar.style.display = "flex";
 
     // Poignée de déplacement (masquée quand la barre est ancrée).
@@ -453,6 +479,14 @@ class TokenActionBar {
       wrap.appendChild(empty);
     }
     this.bar.appendChild(wrap);
+
+    // Accès rapide aux réglages du module (utile joueur, HUD masqué).
+    const gear = document.createElement("div");
+    gear.className = "ab-toggle ab-gear";
+    gear.dataset.tooltip = "Réglages du module";
+    gear.innerHTML = '<i class="fas fa-gear"></i>';
+    gear.addEventListener("click", () => openModuleSettings());
+    this.bar.appendChild(gear);
 
     // Toggle minimiser / ré-étendre (toujours visible).
     const collapsed = localStorage.getItem(this.collapsedKey) === "1";
