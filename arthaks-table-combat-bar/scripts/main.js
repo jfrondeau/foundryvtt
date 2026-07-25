@@ -37,6 +37,18 @@ const notify = {
   warn: (m) => { console.warn(`[Combat Overlay] ${m}`); ui.notifications?.warn(m); },
 };
 
+/** Ouvre les réglages en se plaçant directement sur la catégorie de CE module. */
+async function openModuleSettings() {
+  const app = game.settings?.sheet;
+  if (!app) return;
+  await app.render({ force: true });
+  await new Promise((r) => requestAnimationFrame(r));
+  try { app.changeTab(MODULE_ID, "categories"); return; }
+  catch (e) { console.warn("[Combat Overlay] settings:", e); }
+  // Repli DOM : clique l'entrée de catégorie du module.
+  app.element?.querySelector?.(`[data-tab="${MODULE_ID}"], [data-category="${MODULE_ID}"]`)?.click?.();
+}
+
 const VIDEO_RE = /\.(webm|mp4|m4v|ogv|ogg)$/i;
 const MYSTERY_MAN = "icons/svg/mystery-man.svg";
 
@@ -367,7 +379,7 @@ class CombatOverlay {
 
     const round = document.createElement("div");
     round.className = "co-round";
-    round.textContent = !started ? "Préparation" : (editing ? `Édition · Manche ${combat.round}` : `Manche ${combat.round}`);
+    round.textContent = !started ? "Préparation" : (editing ? `Édition · Round ${combat.round}` : `Round ${combat.round}`);
     header.appendChild(round);
 
     // Combat : bouton d'options ⋮ (bascule combat ↔ édition) + éventuel tour suivant.
@@ -379,6 +391,9 @@ class CombatOverlay {
       edit.classList.toggle("co-active", editing);
       header.appendChild(edit);
     }
+
+    // Accès rapide aux réglages du module (utile joueur, HUD masqué).
+    header.appendChild(this.makeBtn("fas fa-gear", "Réglages du module", () => openModuleSettings()));
 
     // Toggle minimiser (toujours à droite).
     const toggle = document.createElement("div");
@@ -972,7 +987,17 @@ class CombatOverlay {
     if (!token) return;
 
     if (game.settings.get(MODULE_ID, "autoControlToken") && token.isOwner) {
-      try { token.control({ releaseOthers: true }); } catch (e) { console.warn("[Combat Overlay] control:", e); }
+      try {
+        // La sélection est plus visible si la couche Tokens est active, MAIS on ne
+        // sort JAMAIS l'utilisateur d'une couche de dessin (Regions/Drawings) :
+        // il peut être en train de tracer un gabarit/dessin. token.control() suffit
+        // à sélectionner (et la token bar suit) même sans changer de couche.
+        const drawing = [canvas.regions, canvas.drawings].filter(Boolean);
+        if (canvas.tokens && canvas.activeLayer !== canvas.tokens && !drawing.includes(canvas.activeLayer)) {
+          canvas.tokens.activate();
+        }
+        token.control({ releaseOthers: true });
+      } catch (e) { console.warn("[Combat Overlay] control:", e); }
     }
     if (game.settings.get(MODULE_ID, "autoPanToken") && game.user.isGM) {
       try { canvas.animatePan({ x: token.center.x, y: token.center.y }); } catch (e) { console.warn("[Combat Overlay] pan:", e); }

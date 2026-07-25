@@ -9,21 +9,37 @@
   --co-edge: rgba(255, 255, 255, 0.12);
   --co-edge-soft: rgba(255, 255, 255, 0.07);
   position: fixed; z-index: 70;
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; gap: 0;
   width: max-content; max-width: 92vw;
-  background: rgba(14, 16, 22, 0.78);
-  border: 1px solid var(--co-edge); border-radius: 8px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
-  color: #e9ebf2; pointer-events: all; user-select: none;
+  color: #e9ebf2; user-select: none;
   font-size: 12px;
+  /* Conteneur transparent : seuls les blocs de contenu (en-tête, colonnes) ont
+     un fond et captent les clics. Une seule ombre portée épouse la silhouette. */
+  pointer-events: none;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5));
 }
+/* Panneaux jointifs (aucune gouttière transparente) : en-tête pleine largeur en
+   haut, puis chaque COLONNE (rail, détail, liste). Même fond → jonctions
+   invisibles ; le vide sous la colonne la plus courte laisse voir la carte. */
+#combat-overlay .co-header,
+#combat-overlay .co-rail,
+#combat-overlay .co-detail,
+#combat-overlay .co-editlist {
+  pointer-events: auto;
+  background: rgba(14, 16, 22, 0.85);
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+}
+/* Coins arrondis seulement à l'extérieur ; jonctions internes franches. */
+#combat-overlay .co-header { border-radius: 8px 8px 0 0; }
+#combat-overlay .co-rail { border-radius: 0 0 0 8px; }
+#combat-overlay .co-detail { border-radius: 0 0 8px 0; padding: 5px; }
+#combat-overlay .co-editlist { border-radius: 0 0 8px 8px; }
+#combat-overlay.co-collapsed .co-header { border-radius: 8px; }
 
 /* ── En-tête ──────────────────────────────────────────────────────────────── */
 #combat-overlay .co-header {
   display: flex; align-items: center; gap: 6px;
   padding: 4px 6px;
-  border-bottom: 1px solid var(--co-edge-soft);
 }
 #combat-overlay .co-handle { cursor: grab; color: #8b93a5; touch-action: none; font-size: 13px; line-height: 1; }
 #combat-overlay .co-handle:hover { color: #fff; }
@@ -60,15 +76,13 @@
 /* ── Corps ──────────────────────────────────────────────────────────────────
    setup : liste large (une colonne).  combat : rail + carte de détail (deux colonnes). */
 #combat-overlay .co-body {
-  display: flex; align-items: flex-start; gap: 6px; padding: 5px;
+  display: flex; align-items: flex-start; gap: 0;
 }
-/* Combat : rail collé plus à gauche. */
-#combat-overlay.co-combat .co-body { padding: 4px 5px 4px 2px; }
 
 /* ═══ Vue « setup » : liste large avec initiative éditable ═══════════════════ */
 #combat-overlay .co-editlist {
   display: flex; flex-direction: column;
-  min-width: 212px; max-height: 78vh;
+  min-width: 212px; max-height: 78vh; padding: 5px;
 }
 /* Seule la liste des combattants défile ; les contrôles restent visibles. */
 #combat-overlay .co-erows {
@@ -107,7 +121,7 @@
 /* ═══ Vue « combat » : rail fin ═════════════════════════════════════════════ */
 #combat-overlay .co-rail {
   display: flex; flex-direction: column; align-items: stretch; gap: 3px;
-  padding: 2px 3px 2px 1px; max-height: 78vh; overflow-y: auto; overflow-x: visible;
+  padding: 4px; max-height: 78vh; overflow-y: auto; overflow-x: visible;
 }
 #combat-overlay .co-thumbwrap { position: relative; flex: 0 0 auto; cursor: pointer; line-height: 0; }
 #combat-overlay .co-thumbwrap.co-dead { opacity: .55; }
@@ -259,7 +273,6 @@
 
 /* ── État minimisé : ne reste que l'en-tête ──────────────────────────────────── */
 #combat-overlay.co-collapsed .co-collapsible { display: none; }
-#combat-overlay.co-collapsed .co-header { border-bottom: none; }
 
 @media (prefers-reduced-motion: reduce) {
   #combat-overlay * { transition-duration: .001ms !important; }
