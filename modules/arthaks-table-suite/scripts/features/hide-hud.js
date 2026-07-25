@@ -14,35 +14,12 @@
  * (Extrait de « arthaks-table-template-bar » — le mode immersif y vivait avant.)
  */
 
-const MODULE_ID = "arthaks-table-hide-hud";
+import { MODULE_ID } from "../const.js";
 
-Hooks.once("init", () => {
-  // Toggle maître : masque l'interface des JOUEURS (le MJ garde la sienne).
-  game.settings.register(MODULE_ID, "hidePlayerHud", {
-    name: "Hide player HUD — masquer l'interface des joueurs",
-    hint: "Réservé au MJ. Pour les JOUEURS uniquement : ne conserve que le canvas et les barres de la table. Le MJ garde son interface complète.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-    onChange: () => HideHud.apply(),
-  });
-
-  // Seule exception configurable : conserver le chat (chat-scroll), sans sa saisie.
-  game.settings.register(MODULE_ID, "showChat", {
-    name: "Chat",
-    hint: "Conserver le journal de chat (chat-scroll) visible pour les joueurs quand l'interface est masquée. Le champ de saisie (chat-form) reste masqué.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-    onChange: () => HideHud.apply(),
-  });
-});
-
-Hooks.once("ready", () => HideHud.apply());
-
-class HideHud {
+// Réglages (hidePlayerHud, showChat) : centralisés dans settings.js.
+// Contrairement aux barres, cette fonctionnalité n'a pas de toggle d'activation
+// dédié : le réglage « hidePlayerHud » EST son interrupteur (désactivé = inactif).
+export class HideHud {
   /**
    * Applique le masquage selon les réglages monde (joueurs seulement). Un
    * changement de réglage monde déclenche ce onChange sur tous les clients

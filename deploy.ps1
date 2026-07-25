@@ -1,13 +1,13 @@
 # Déploie les modules locaux vers le share Foundry.
-# Usage :  pwsh ./deploy.ps1                            (déploie tous les modules listés)
-#          pwsh ./deploy.ps1 arthaks-table-combat-bar   (déploie un seul module)
+# Usage :  pwsh ./deploy.ps1                          (déploie tous les modules listés)
+#          pwsh ./deploy.ps1 arthaks-table-suite      (déploie un seul module)
 param([string[]]$Modules)
 
 $root    = $PSScriptRoot
 $destDir = "\\192.168.68.59\foundryuserdata\Data\modules"
 
 # Modules du repo à déployer (dossiers contenant un module.json).
-$all = @("arthaks-table-template-bar", "arthaks-table-combat-bar", "arthaks-table-token-bar", "arthaks-table-hide-hud")
+$all = @("arthaks-table-suite")
 if (-not $Modules -or $Modules.Count -eq 0) { $Modules = $all }
 
 if (-not (Test-Path $destDir)) { throw "Share inaccessible : $destDir" }

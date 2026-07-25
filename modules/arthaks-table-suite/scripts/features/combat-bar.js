@@ -29,154 +29,29 @@
  *  - Bouton ⟨ / ⟩ : minimise / ré-étend (état mémorisé par utilisateur).
  */
 
-const MODULE_ID = "arthaks-table-combat-bar";
-const NS = MODULE_ID;
+import { MODULE_ID } from "../const.js";
+import { makeNotify, openModuleSettings } from "../lib/common.js";
+import { FloatingBar } from "../lib/floating-bar.js";
 
-const notify = {
-  info: (m) => console.log(`[Combat Overlay] ${m}`),
-  warn: (m) => { console.warn(`[Combat Overlay] ${m}`); ui.notifications?.warn(m); },
-};
-
-/** Ouvre les réglages en se plaçant directement sur la catégorie de CE module. */
-async function openModuleSettings() {
-  const app = game.settings?.sheet;
-  if (!app) return;
-  await app.render({ force: true });
-  await new Promise((r) => requestAnimationFrame(r));
-  try { app.changeTab(MODULE_ID, "categories"); return; }
-  catch (e) { console.warn("[Combat Overlay] settings:", e); }
-  // Repli DOM : clique l'entrée de catégorie du module.
-  app.element?.querySelector?.(`[data-tab="${MODULE_ID}"], [data-category="${MODULE_ID}"]`)?.click?.();
-}
+const notify = makeNotify("Combat");
 
 const VIDEO_RE = /\.(webm|mp4|m4v|ogv|ogg)$/i;
 const MYSTERY_MAN = "icons/svg/mystery-man.svg";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// RÉGLAGES + RACCOURCIS
-// ═══════════════════════════════════════════════════════════════════════════════
-Hooks.once("init", () => {
-  game.settings.register(MODULE_ID, "imageMode", {
-    name: "Image des combattants",
-    hint: "Portrait de la fiche d'acteur ou image du token placé sur la scène.",
-    scope: "world",
-    config: true,
-    type: String,
-    choices: { actor: "Portrait de l'acteur", token: "Image du token" },
-    default: "actor",
-    onChange: () => CombatOverlay.instance?.sync(),
-  });
-
-  game.settings.register(MODULE_ID, "showImages", {
-    name: "Afficher les portraits",
-    hint: "Rail avec les images des combattants (créature / personnage). Désactivé : pastilles compactes avec initiales.",
-    scope: "client",
-    config: true,
-    type: Boolean,
-    default: true,
-    onChange: () => CombatOverlay.instance?.sync(),
-  });
-
-  game.settings.register(MODULE_ID, "hideInitInCombat", {
-    name: "Masquer l'initiative en combat",
-    hint: "L'initiative n'est utile qu'au réglage : on la masque une fois le combat lancé (rééditable via le bouton d'options ⋮). Désactivé : petit chiffre dans le coin de la vignette.",
-    scope: "client",
-    config: true,
-    type: Boolean,
-    default: true,
-    onChange: () => CombatOverlay.instance?.sync(),
-  });
-
-  game.settings.register(MODULE_ID, "showNextButton", {
-    name: "Afficher le bouton « Tour suivant »",
-    hint: "Ajoute un bouton de passage au tour suivant dans l'en-tête. Désactivé par défaut : le raccourci « . » suffit.",
-    scope: "client",
-    config: true,
-    type: Boolean,
-    default: false,
-    onChange: () => CombatOverlay.instance?.sync(),
-  });
-
-  game.settings.register(MODULE_ID, "rowSize", {
-    name: "Taille des vignettes du rail (px)",
-    hint: "Diamètre des vignettes de combattants dans le rail.",
-    scope: "client",
-    config: true,
-    type: Number,
-    default: 46,
-    onChange: () => CombatOverlay.instance?.applySizes(),
-  });
-
-  game.settings.register(MODULE_ID, "currentImageSize", {
-    name: "Taille du portrait du combattant courant (px)",
-    hint: "Grand portrait du combattant courant (et des cibles), affiché à côté du rail.",
-    scope: "client",
-    config: true,
-    type: Number,
-    default: 132,
-    onChange: () => CombatOverlay.instance?.applySizes(),
-  });
-
-  game.settings.register(MODULE_ID, "autoControlToken", {
-    name: "Sélectionner le token du combattant courant",
-    hint: "À chaque changement de tour, sélectionne sur la scène le token du combattant courant (pour l'utilisateur qui le possède).",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
-
-  game.settings.register(MODULE_ID, "autoPanToken", {
-    name: "Centrer la caméra sur le combattant courant (MJ)",
-    hint: "À chaque changement de tour, centre la vue du MJ sur le token courant. N'affecte pas la caméra des joueurs.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
-
-  // « . » : tour suivant (le MJ pilote le combat → raccourci réservé au MJ).
-  game.keybindings.register(MODULE_ID, "nextTurn", {
-    name: "Combat : tour suivant",
-    hint: "Passe au combattant suivant.",
-    editable: [{ key: "Period" }],
-    restricted: true,
-    onDown: () => CombatOverlay.advanceTurn(+1),
-  });
-
-  // « , » : tour précédent.
-  game.keybindings.register(MODULE_ID, "prevTurn", {
-    name: "Combat : tour précédent",
-    hint: "Revient au combattant précédent.",
-    editable: [{ key: "Comma" }],
-    restricted: true,
-    onDown: () => CombatOverlay.advanceTurn(-1),
-  });
-
-  // « / » : place le curseur dans le champ PV du panneau cible (saisie clavier
-  // rapide à la table). Cible : les tokens ciblés (T), sinon le token sélectionné.
-  game.keybindings.register(MODULE_ID, "focusHp", {
-    name: "Combat : modifier les PV de la cible",
-    hint: "Place le curseur dans le champ PV du panneau cible. Entrer « 8 » (dégâts) ou « +8 » (soin), puis Entrée.",
-    editable: [{ key: "Slash" }],
-    restricted: true,
-    onDown: () => CombatOverlay.focusHp(),
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DÉMARRAGE
-// ═══════════════════════════════════════════════════════════════════════════════
-Hooks.once("ready", () => {
-  CombatOverlay.instance = new CombatOverlay();
-  CombatOverlay.instance.init();
-});
+// Réglages & raccourcis clavier de cette fonctionnalité : centralisés dans settings.js.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // OVERLAY
 // ═══════════════════════════════════════════════════════════════════════════════
-class CombatOverlay {
+export class CombatOverlay extends FloatingBar {
   static instance = null;
+
+  /** Instancie et démarre l'overlay (idempotent). Appelé selon le réglage d'activation. */
+  static start() {
+    if (this.instance) return;
+    this.instance = new this();
+    this.instance.init();
+  }
 
   /** Fait avancer le combat actif d'un pas (MJ seulement). Renvoie true si consommé. */
   static advanceTurn(dir) {
@@ -211,19 +86,18 @@ class CombatOverlay {
   }
 
   constructor() {
-    this.root = null;
-    this.hookIds = {};
+    super("combat");
     this.editMode = false;              // édition manuelle de l'init en cours de combat (bouton ⋮)
     this._lastTurnId = null;            // id du combattant courant au dernier rendu
     this._lastVisibleCurrentId = null;  // dernier combattant courant VISIBLE (pour ce user)
-    this.onResize = this.onResize.bind(this);
     // Regroupe les rafales de hooks (création multiple de combattants, etc.).
     this.sync = foundry.utils.debounce(this._sync.bind(this), 30);
   }
 
+  get root() { return this.el; }
+  set root(v) { this.el = v; }
+
   get combat() { return game.combats?.active ?? null; }
-  get posKey() { return `${NS}.pos.${game.user.id}`; }
-  get collapsedKey() { return `${NS}.collapsed.${game.user.id}`; }
 
   // ── Cycle de vie ─────────────────────────────────────────────────────────
   init() {
@@ -256,12 +130,7 @@ class CombatOverlay {
     this.hookIds.updateActor  = Hooks.on("updateActor", rerender);
   }
 
-  destroy() {
-    for (const [hook, id] of Object.entries(this.hookIds)) Hooks.off(hook, id);
-    window.removeEventListener("resize", this.onResize);
-    this.root?.remove();
-    CombatOverlay.instance = null;
-  }
+  // destroy() : hérité de FloatingBar.
 
   // ── Décision d'affichage ────────────────────────────────────────────────
   _sync() {
@@ -1042,58 +911,14 @@ class CombatOverlay {
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre" : "Minimiser";
   }
 
-  // ── Position (drag + mémorisation) ───────────────────────────────────────
-  clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
-  setPos(left, top) {
-    const bw = this.root.offsetWidth || 200;
-    const bh = this.root.offsetHeight || 60;
-    left = this.clamp(left, 4, window.innerWidth - bw - 4);
-    top = this.clamp(top, 4, window.innerHeight - bh - 4);
-    this.root.style.left = `${Math.round(left)}px`;
-    this.root.style.top = `${Math.round(top)}px`;
-    this.root.style.right = this.root.style.bottom = "auto";
-  }
-
-  savePos() {
-    const r = this.root.getBoundingClientRect();
-    localStorage.setItem(this.posKey, JSON.stringify({ left: r.left, top: r.top }));
-  }
-
-  readPos() {
-    try { return JSON.parse(localStorage.getItem(this.posKey)); } catch { return null; }
-  }
-
+  // ── Position ──────────────────────────────────────────────────────────────
+  // clamp / setPos / savePos / readPos / onResize / initDrag : hérités de FloatingBar.
+  // Seule la position PAR DÉFAUT diffère (coin supérieur gauche plutôt que hotbar).
   applyPosition() {
     const saved = this.readPos();
     if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
       return this.setPos(saved.left, saved.top);
     }
     this.setPos(10, 80); // par défaut : coin supérieur gauche de la scène.
-  }
-
-  onResize() {
-    if (!this.root) return;
-    const r = this.root.getBoundingClientRect();
-    this.setPos(r.left, r.top);
-  }
-
-  initDrag(handle) {
-    handle.addEventListener("pointerdown", (ev) => {
-      ev.preventDefault();
-      const r = this.root.getBoundingClientRect();
-      const offX = ev.clientX - r.left;
-      const offY = ev.clientY - r.top;
-      handle.setPointerCapture(ev.pointerId);
-      const onMove = (e) => this.setPos(e.clientX - offX, e.clientY - offY);
-      const onUp = () => {
-        handle.releasePointerCapture(ev.pointerId);
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        this.savePos();
-      };
-      handle.addEventListener("pointermove", onMove);
-      handle.addEventListener("pointerup", onUp);
-    });
   }
 }

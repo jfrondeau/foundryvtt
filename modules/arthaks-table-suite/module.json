@@ -1,0 +1,24 @@
+{
+  "id": "arthaks-table-suite",
+  "title": "Arthak's Table",
+  "description": "Suite pour jouer en PRÉSENTIEL autour d'une vraie table avec un écran partagé : les joueurs lancent leurs vrais dés, Foundry sert d'écran de jeu commun. Regroupe une barre flottante de gabarits de sort (mode gabarit Regions de dnd5e), un suivi de combat compact superposé à la scène, une barre d'actions du token sélectionné (armes, features, sorts), et le masquage de l'interface des joueurs pour un écran de table épuré. Chaque élément s'active indépendamment dans les réglages.",
+  "version": "2.0.0",
+  "authors": [
+    { "name": "jfrondeau" }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/main.css"
+  ],
+  "compatibility": {
+    "minimum": "13",
+    "verified": "14"
+  },
+  "relationships": {
+    "systems": [
+      { "id": "dnd5e", "type": "system", "compatibility": { "minimum": "5" } }
+    ]
+  }
+}

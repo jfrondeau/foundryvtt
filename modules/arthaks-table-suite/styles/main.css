@@ -1,3 +1,71 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Arthak's Table — feuille de style unifiée de la suite.
+   Namespaces disjoints : #spell-template-bar (tb-), #combat-overlay (co-),
+   #selected-token-actions (ab-), body.ahh-* — aucune collision de sélecteurs.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ╔═══ BARRE DE GABARITS ══════════════════════════════════════════════════╗ */
+/* ── Barre de gabarits ──────────────────────────────────────────────────────── */
+#spell-template-bar {
+  --tb-btn: 40px;
+  position: fixed; z-index: 70;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid #7a7a7a; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: all; user-select: none;
+}
+
+#spell-template-bar .tb-handle {
+  flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#spell-template-bar .tb-handle:hover { color: #fff; }
+#spell-template-bar .tb-handle:active { cursor: grabbing; color: #ff6400; }
+
+#spell-template-bar .tb-label {
+  font-size: 11px; color: #ddd; font-weight: bold; white-space: nowrap; margin-right: 2px;
+}
+
+#spell-template-bar .tb-btn {
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: var(--tb-btn); height: var(--tb-btn); color: #eee;
+  border: 2px solid #4a90d9; border-radius: 4px; cursor: pointer;
+  background: rgba(74, 144, 217, 0.15); transition: all .1s ease;
+}
+#spell-template-bar .tb-btn:hover {
+  border-color: #7ec8ff; background: rgba(126, 200, 255, 0.3);
+  color: #fff; transform: translateY(-2px);
+}
+#spell-template-bar .tb-btn.tb-active {
+  border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
+}
+#spell-template-bar .tb-btn.tb-disabled {
+  opacity: .35; cursor: not-allowed; pointer-events: none;
+  border-color: #666; background: rgba(120, 120, 120, 0.15);
+}
+#spell-template-bar .tb-btn i { font-size: 16px; pointer-events: none; }
+
+#spell-template-bar .tb-trash {
+  border-color: #b5484a; background: rgba(181, 72, 74, 0.15);
+}
+#spell-template-bar .tb-trash:hover { border-color: #ff7e7e; background: rgba(255, 126, 126, 0.3); }
+
+#spell-template-bar .tb-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
+
+#spell-template-bar .tb-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  color: #ccc; border: 1px solid #666; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+#spell-template-bar .tb-toggle:hover { color: #fff; border-color: #ff6400; }
+
+/* ── État minimisé : ne reste que la poignée + le toggle ─────────────────────── */
+#spell-template-bar.stb-collapsed { gap: 2px; padding: 3px 5px; }
+#spell-template-bar.stb-collapsed .tb-collapsible { display: none; }
+
+/* ╔═══ SUIVI DE COMBAT ════════════════════════════════════════════════════╗ */
 /* ── Overlay de combat — layout « Rail » ─────────────────────────────────────── */
 #combat-overlay {
   --co-row: 46px;               /* diamètre des vignettes du rail (réglage rowSize) */
@@ -276,4 +344,170 @@
 
 @media (prefers-reduced-motion: reduce) {
   #combat-overlay * { transition-duration: .001ms !important; }
+}
+
+/* ╔═══ BARRE D'ACTION DU TOKEN ════════════════════════════════════════════╗ */
+/* ── Barre d'action du token sélectionné ─────────────────────────────────────── */
+#selected-token-actions {
+  position: fixed; z-index: 70;
+  display: flex; align-items: center; gap: 6px;
+  max-width: 96vw; padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65); border: 1px solid #7a7a7a; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: all; user-select: none;
+}
+
+#selected-token-actions .ab-handle {
+  flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#selected-token-actions .ab-handle:hover { color: #fff; }
+#selected-token-actions .ab-handle:active { cursor: grabbing; color: #ff6400; }
+
+#selected-token-actions .ab-label {
+  font-size: 11px; color: #ddd; font-weight: bold;
+  white-space: nowrap; margin-right: 2px; max-width: 120px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Rangée de sections. align-items:flex-end → toutes les rangées d'icônes
+   s'alignent en bas, quelle que soit la présence d'une ligne de libellé. */
+#selected-token-actions .ab-items {
+  display: flex; align-items: flex-end; gap: 6px;
+  overflow-x: auto; overflow-y: hidden; padding: 2px;
+}
+#selected-token-actions .ab-items::-webkit-scrollbar { height: 6px; }
+#selected-token-actions .ab-items::-webkit-scrollbar-thumb { background: #666; border-radius: 3px; }
+
+/* Section = colonne : mince ligne de libellé au-dessus, rangée d'icônes dessous.
+   align-items:center → libellé et rangée centrés l'un sur l'autre. */
+#selected-token-actions .ab-section {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 0 0 auto;
+}
+/* Léger séparateur vertical entre sections adjacentes. */
+#selected-token-actions .ab-section + .ab-section {
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding-left: 6px; margin-left: 0;
+}
+
+/* Rangée d'icônes d'une section. */
+#selected-token-actions .ab-row {
+  display: flex; align-items: center; gap: 4px;
+}
+
+#selected-token-actions .ab-btn {
+  position: relative; flex: 0 0 auto;
+  background-size: cover; background-position: center;
+  border: 2px solid #555; border-radius: 4px; cursor: pointer;
+  transition: border-color .1s ease, transform .1s ease;
+}
+#selected-token-actions .ab-btn:hover { border-color: #ff6400; transform: translateY(-2px); }
+#selected-token-actions .ab-btn.ab-cantrip { border-color: #4a90d9; }
+#selected-token-actions .ab-btn.ab-cantrip:hover { border-color: #7ec8ff; }
+#selected-token-actions .ab-btn.ab-feature { border-color: #7a9c4a; }
+#selected-token-actions .ab-btn.ab-feature:hover { border-color: #b5d97e; }
+#selected-token-actions .ab-btn.ab-spell { border-color: #9a6cc0; }
+#selected-token-actions .ab-btn.ab-spell:hover { border-color: #c79ce8; }
+
+/* Badge de charges restantes / total, dans le coin du bouton. */
+#selected-token-actions .ab-btn .ab-badge {
+  position: absolute; right: 1px; bottom: 1px;
+  min-width: 14px; height: 14px; line-height: 13px; padding: 0 3px;
+  font-size: 10px; font-weight: bold; text-align: center;
+  color: #fff; background: rgba(15, 15, 15, 0.92);
+  border: 1px solid #888; border-radius: 7px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+#selected-token-actions .ab-btn .ab-badge.ab-badge-empty { color: #ff9a9a; border-color: #b5484a; }
+
+/* Mince ligne de libellé (Armes, Features, Cantrips, N1…) + compteur de slots,
+   posée au-dessus de la rangée d'icônes de sa section et centrée sur celle-ci. */
+#selected-token-actions .ab-group {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  height: 12px; line-height: 12px; padding: 0 2px; white-space: nowrap;
+  font-size: 9px; font-weight: bold; color: #bdbdbd;
+  text-transform: uppercase; letter-spacing: .3px;
+}
+#selected-token-actions .ab-group .ab-slot {
+  font-size: 10px; font-weight: bold; color: #ffd479; line-height: 11px;
+  background: rgba(0, 0, 0, 0.45); border: 1px solid #555; border-radius: 7px;
+  padding: 0 4px; text-transform: none; font-variant-numeric: tabular-nums;
+}
+
+#selected-token-actions .ab-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
+#selected-token-actions .ab-empty { font-size: 12px; color: #999; font-style: italic; padding: 4px 8px; }
+
+#selected-token-actions .ab-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  color: #ccc; border: 1px solid #666; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+#selected-token-actions .ab-toggle:hover { color: #fff; border-color: #ff6400; }
+
+/* ── État minimisé : ne restent que la poignée + le toggle ────────────────────── */
+#selected-token-actions.ab-collapsed { gap: 2px; padding: 3px 5px; }
+#selected-token-actions.ab-collapsed .ab-collapsible { display: none; }
+
+/* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
+#selected-token-actions.ab-vertical { flex-direction: column; align-items: center; }
+#selected-token-actions.ab-vertical .ab-label { margin-right: 0; }
+#selected-token-actions.ab-vertical .ab-items {
+  flex-direction: column; align-items: center;
+  overflow-x: hidden; overflow-y: auto; max-height: 74vh;
+}
+/* Chaque section empile ses boutons en colonne → une seule colonne d'icônes. */
+#selected-token-actions.ab-vertical .ab-row { flex-direction: column; }
+#selected-token-actions.ab-vertical .ab-items::-webkit-scrollbar { width: 6px; height: auto; }
+#selected-token-actions.ab-vertical .ab-section + .ab-section {
+  border-left: none; padding-left: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 6px;
+}
+
+/* ╔═══ MASQUAGE DE L'INTERFACE JOUEUR ═════════════════════════════════════╗ */
+/* ── Hide player HUD : masque toute l'interface des joueurs ──────────────────── */
+body.ahh-hide-hud #ui-top,
+body.ahh-hide-hud #ui-left,
+body.ahh-hide-hud #ui-bottom,
+body.ahh-hide-hud #navigation,
+body.ahh-hide-hud #controls,
+body.ahh-hide-hud #scene-controls,
+body.ahh-hide-hud #players,
+body.ahh-hide-hud #players-active,
+body.ahh-hide-hud #hotbar,
+body.ahh-hide-hud #logo {
+  display: none !important;
+}
+
+/* Sans l'exception « Chat » : la sidebar entière est masquée aussi. */
+body.ahh-hide-hud:not(.ahh-show-chat) #ui-right,
+body.ahh-hide-hud:not(.ahh-show-chat) #sidebar {
+  display: none !important;
+}
+
+/* Avec l'exception « Chat » : la sidebar reste. On masque la zone de saisie
+   (.chat-form contient #chat-controls, les modes de message et l'éditeur
+   ProseMirror). NB : chat-scroll / chat-form sont des CLASSES en v14. */
+body.ahh-hide-hud.ahh-show-chat .chat-form {
+  display: none !important;
+}
+
+/* La zone de saisie ne doit jamais apparaître pour un joueur au HUD masqué — ni
+   dans la sidebar, ni dans la fenêtre flottante #chat-notifications (affichée
+   quand la sidebar est repliée). #chat-message = éditeur ProseMirror. */
+body.ahh-hide-hud #chat-message,
+body.ahh-hide-hud #chat-controls {
+  display: none !important;
+}
+
+/* Barre d'onglets de la sidebar : on ne garde que le bouton Chat et le toggle
+   d'ouverture/fermeture ; tous les autres onglets sont masqués. Le joueur peut
+   ainsi ouvrir/fermer la sidebar lui-même pour lire le chat. */
+body.ahh-hide-hud.ahh-show-chat #sidebar-tabs menu > li:not(:has(button[data-tab="chat"])):not(:has(button[data-action="toggleState"])) {
+  display: none !important;
+}
+
+/* Côté joueur, le chat isolé reste complètement transparent (défaut Foundry) :
+   seules les bulles de message flottent au-dessus de la scène. */
+body.ahh-hide-hud.ahh-show-chat #sidebar-content #chat {
+  background: transparent !important;
 }

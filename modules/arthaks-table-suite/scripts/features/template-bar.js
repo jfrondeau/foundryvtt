@@ -26,25 +26,12 @@
  * dans son propre module « arthaks-table-hide-hud ».)
  */
 
-const MODULE_ID = "arthaks-table-template-bar";
-const NS = MODULE_ID;
+import { MODULE_ID } from "../const.js";
+import { makeNotify, openModuleSettings } from "../lib/common.js";
+import { FloatingBar } from "../lib/floating-bar.js";
 
-const notify = {
-  info: (m) => console.log(`[Spell Template Bar] ${m}`),
-  warn: (m) => { console.warn(`[Spell Template Bar] ${m}`); ui.notifications?.warn(m); },
-};
-
-/** Ouvre les réglages en se plaçant directement sur la catégorie de CE module. */
-async function openModuleSettings() {
-  const app = game.settings?.sheet;
-  if (!app) return;
-  await app.render({ force: true });
-  await new Promise((r) => requestAnimationFrame(r));
-  try { app.changeTab(MODULE_ID, "categories"); return; }
-  catch (e) { console.warn("[Spell Template Bar] settings:", e); }
-  // Repli DOM : clique l'entrée de catégorie du module.
-  app.element?.querySelector?.(`[data-tab="${MODULE_ID}"], [data-category="${MODULE_ID}"]`)?.click?.();
-}
+const NS = MODULE_ID;                     // namespace des flags de Region (owner)
+const notify = makeNotify("Gabarits");
 
 // ── Formes disponibles (noms des outils du contrôle « regions » de dnd5e) ─────
 const SHAPES = [
@@ -57,50 +44,32 @@ const SHAPES = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// RÉGLAGES
-// ═══════════════════════════════════════════════════════════════════════════════
-Hooks.once("init", () => {
-  game.settings.register(MODULE_ID, "buttonSize", {
-    name: "Taille des boutons (px)",
-    hint: "Taille des boutons de la barre de gabarits.",
-    scope: "client",
-    config: true,
-    type: Number,
-    default: 40,
-    onChange: () => SpellTemplateBar.instance?.applyButtonSize(),
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DÉMARRAGE
-// ═══════════════════════════════════════════════════════════════════════════════
-Hooks.once("ready", () => {
-  // Garde : le contrôle « regions » + « templateMode » doivent exister.
-  if (!ui.controls.controls?.regions?.tools?.templateMode) {
-    notify.warn("Le mode gabarit (Regions → templateMode) est introuvable. " +
-                "Ce module nécessite dnd5e 5.x sur Foundry v13+.");
-  }
-  SpellTemplateBar.instance = new SpellTemplateBar();
-  SpellTemplateBar.instance.render();
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // BARRE
 // ═══════════════════════════════════════════════════════════════════════════════
-class SpellTemplateBar {
+export class SpellTemplateBar extends FloatingBar {
   static instance = null;
 
+  /** Instancie et affiche la barre (idempotent). Appelé selon le réglage d'activation. */
+  static start() {
+    if (this.instance) return;
+    // Garde : le contrôle « regions » + « templateMode » doivent exister.
+    if (!ui.controls.controls?.regions?.tools?.templateMode) {
+      notify.warn("Le mode gabarit (Regions → templateMode) est introuvable. " +
+                  "Cette fonctionnalité nécessite dnd5e 5.x sur Foundry v13+.");
+    }
+    this.instance = new this();
+    this.instance.render();
+  }
+
   constructor() {
-    this.bar = null;
+    super("template");
     this.returnLayer = null;      // couche à restaurer après le dessin
     this.lastShape = null;        // dernière forme activée (sert au nommage)
     this.emanationTokenId = null; // token auquel attacher la prochaine émanation
-    this.hookIds = {};
-    this.onResize = this.onResize.bind(this);
   }
 
-  get posKey() { return `${NS}.pos.${game.user.id}`; }
-  get collapsedKey() { return `${NS}.collapsed.${game.user.id}`; }
+  get bar() { return this.el; }
+  set bar(v) { this.el = v; }
 
   // ── Construction ─────────────────────────────────────────────────────────
   render() {
@@ -211,7 +180,7 @@ class SpellTemplateBar {
   }
 
   applyButtonSize() {
-    const size = Number(game.settings.get(MODULE_ID, "buttonSize")) || 40;
+    const size = Number(game.settings.get(MODULE_ID, "templateButtonSize")) || 40;
     this.bar?.style.setProperty("--tb-btn", `${size}px`);
   }
 
@@ -231,63 +200,7 @@ class SpellTemplateBar {
     this.setPos(r.left, r.top);
   }
 
-  // ── Position ─────────────────────────────────────────────────────────────
-  clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
-  setPos(left, top) {
-    const bw = this.bar.offsetWidth  || 200;
-    const bh = this.bar.offsetHeight || 40;
-    left = this.clamp(left, 4, window.innerWidth  - bw - 4);
-    top  = this.clamp(top,  4, window.innerHeight - bh - 4);
-    this.bar.style.left = `${Math.round(left)}px`;
-    this.bar.style.top  = `${Math.round(top)}px`;
-    this.bar.style.right = this.bar.style.bottom = "auto";
-  }
-
-  savePos() {
-    const r = this.bar.getBoundingClientRect();
-    localStorage.setItem(this.posKey, JSON.stringify({ left: r.left, top: r.top }));
-  }
-
-  readPos() {
-    try { return JSON.parse(localStorage.getItem(this.posKey)); } catch { return null; }
-  }
-
-  applyPosition() {
-    const saved = this.readPos();
-    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-      return this.setPos(saved.left, saved.top);
-    }
-    const hb = document.getElementById("hotbar");
-    const r  = hb?.getBoundingClientRect();
-    const bw = this.bar.offsetWidth, bh = this.bar.offsetHeight;
-    if (r && r.width) this.setPos(r.left + r.width / 2 - bw / 2, r.top - bh - 8);
-    else this.setPos((window.innerWidth - bw) / 2, window.innerHeight - bh - 90);
-  }
-
-  onResize() {
-    const r = this.bar.getBoundingClientRect();
-    this.setPos(r.left, r.top);
-  }
-
-  initDrag(handle) {
-    handle.addEventListener("pointerdown", (ev) => {
-      ev.preventDefault();
-      const r = this.bar.getBoundingClientRect();
-      const offX = ev.clientX - r.left;
-      const offY = ev.clientY - r.top;
-      handle.setPointerCapture(ev.pointerId);
-      const onMove = (e) => this.setPos(e.clientX - offX, e.clientY - offY);
-      const onUp = () => {
-        handle.releasePointerCapture(ev.pointerId);
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        this.savePos();
-      };
-      handle.addEventListener("pointermove", onMove);
-      handle.addEventListener("pointerup", onUp);
-    });
-  }
+  // Position / drag / mémorisation : hérités de FloatingBar (clé « template »).
 
   // ── Activation du mode gabarit ─────────────────────────────────────────────
   async activateTool(shape) {
@@ -422,10 +335,5 @@ class SpellTemplateBar {
     });
   }
 
-  destroy() {
-    for (const [hook, id] of Object.entries(this.hookIds)) Hooks.off(hook, id);
-    window.removeEventListener("resize", this.onResize);
-    this.bar?.remove();
-    SpellTemplateBar.instance = null;
-  }
+  // destroy() : hérité de FloatingBar (Hooks.off + resize + remove + instance = null).
 }

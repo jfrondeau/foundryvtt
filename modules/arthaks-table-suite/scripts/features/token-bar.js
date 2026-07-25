@@ -25,126 +25,17 @@
  * « rappel ») est configurable via les réglages du module.
  */
 
-const MODULE_ID = "arthaks-table-token-bar";
-const NS = MODULE_ID;
+import { MODULE_ID } from "../const.js";
+import { makeNotify, openModuleSettings } from "../lib/common.js";
+import { FloatingBar } from "../lib/floating-bar.js";
+
 const BAR_ID = "selected-token-actions";
-
-const notify = {
-  info: (m) => console.log(`[Token Bar] ${m}`),
-  warn: (m) => { console.warn(`[Token Bar] ${m}`); ui.notifications?.warn(m); },
-};
-
-/** Ouvre les réglages en se plaçant directement sur la catégorie de CE module. */
-async function openModuleSettings() {
-  const app = game.settings?.sheet;
-  if (!app) return;
-  await app.render({ force: true });
-  await new Promise((r) => requestAnimationFrame(r));
-  try { app.changeTab(MODULE_ID, "categories"); return; }
-  catch (e) { console.warn("[Token Bar] settings:", e); }
-  // Repli DOM : clique l'entrée de catégorie du module.
-  app.element?.querySelector?.(`[data-tab="${MODULE_ID}"], [data-category="${MODULE_ID}"]`)?.click?.();
-}
+const notify = makeNotify("Token Bar");
 
 // Configuration vivante, rafraîchie depuis les réglages à chaque rendu.
 let CFG = {};
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// RÉGLAGES
-// ═══════════════════════════════════════════════════════════════════════════════
-Hooks.once("init", () => {
-  const reRender = () => TokenActionBar.instance?.render();
-
-  game.settings.register(MODULE_ID, "buttonSize", {
-    name: "Taille des boutons (px)",
-    hint: "Taille des icônes d'objet de la barre.",
-    scope: "client", config: true, type: Number, default: 42,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "includeInventory", {
-    name: "Afficher les armes",
-    hint: "Armes (équipées par défaut).",
-    scope: "client", config: true, type: Boolean, default: true,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "onlyEquippedWeapons", {
-    name: "Armes équipées uniquement",
-    hint: "N'afficher que les armes actuellement équipées.",
-    scope: "client", config: true, type: Boolean, default: true,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "includeFeatures", {
-    name: "Afficher les features",
-    hint: "Dons réellement actionnables (effet réel, consommation de ressource ou charges), avec compteur de charges.",
-    scope: "client", config: true, type: Boolean, default: true,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "includeSpells", {
-    name: "Afficher les sorts",
-    hint: "Cantrips (niveau 0) puis sorts groupés par niveau, avec les emplacements restants / total.",
-    scope: "client", config: true, type: Boolean, default: true,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "showGroupLabels", {
-    name: "Afficher les en-têtes de groupe",
-    hint: "Mince ligne de libellés de section (Armes, Features, Cantrips, N1…) et compteurs d'emplacements, au-dessus des icônes.",
-    scope: "client", config: true, type: Boolean, default: true,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "dockPosition", {
-    name: "Ancrage de la barre",
-    hint: "Ancre la barre sur un bord de l'écran (la poignée de déplacement est alors masquée). « Libre » = glisser-déposer, position mémorisée.",
-    scope: "client", config: true, type: String,
-    choices: {
-      free: "Libre (glisser-déposer)",
-      "bottom-left": "Bas · gauche",
-      "bottom-center": "Bas · centre",
-      "bottom-right": "Bas · droite",
-      "top-left": "Haut · gauche",
-      "top-center": "Haut · centre",
-      "top-right": "Haut · droite",
-      "left-top": "Gauche · haut",
-      "left-center": "Gauche · centre",
-      "left-bottom": "Gauche · bas",
-      "right-top": "Droite · haut",
-      "right-center": "Droite · centre",
-      "right-bottom": "Droite · bas",
-    },
-    default: "bottom-center",
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "dedupeByName", {
-    name: "Masquer les doublons",
-    hint: "Masque les objets de même nom (garde le premier).",
-    scope: "client", config: true, type: Boolean, default: true,
-    onChange: reRender,
-  });
-
-  game.settings.register(MODULE_ID, "alwaysShowFeatureNames", {
-    name: "Features « rappel » toujours affichées",
-    hint: "Noms de features toujours affichées même sans effet mécanique (séparés par des virgules). Correspondance par sous-chaîne, casse ignorée.",
-    scope: "client", config: true, type: String, default: "Multiattack, Spellcasting",
-    onChange: reRender,
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DÉMARRAGE
-// ═══════════════════════════════════════════════════════════════════════════════
-Hooks.once("ready", () => {
-  if (game.system.id !== "dnd5e") {
-    notify.warn(`Ce module cible le système dnd5e (système actuel : ${game.system.id}).`);
-  }
-  TokenActionBar.instance = new TokenActionBar();
-  TokenActionBar.instance.init();
-});
+// Réglages de cette fonctionnalité : centralisés dans settings.js.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DÉTECTION DES OBJETS (lit CFG, rafraîchi à chaque rendu)
@@ -334,18 +225,26 @@ function buildSections(actor) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // BARRE
 // ═══════════════════════════════════════════════════════════════════════════════
-class TokenActionBar {
+export class TokenActionBar extends FloatingBar {
   static instance = null;
 
-  constructor() {
-    this.bar = null;
-    this.hookIds = {};
-    this._activeActorId = null;     // acteur actuellement affiché (rafraîchissement ciblé)
-    this.onResize = this.onResize.bind(this);
+  /** Instancie et démarre la barre (idempotent). Appelé selon le réglage d'activation. */
+  static start() {
+    if (this.instance) return;
+    if (game.system.id !== "dnd5e") {
+      notify.warn(`Cette fonctionnalité cible le système dnd5e (système actuel : ${game.system.id}).`);
+    }
+    this.instance = new this();
+    this.instance.init();
   }
 
-  get posKey() { return `${NS}.pos.${game.user.id}`; }
-  get collapsedKey() { return `${NS}.collapsed.${game.user.id}`; }
+  constructor() {
+    super("token");
+    this._activeActorId = null;     // acteur actuellement affiché (rafraîchissement ciblé)
+  }
+
+  get bar() { return this.el; }
+  set bar(v) { this.el = v; }
 
   // ── Cycle de vie ─────────────────────────────────────────────────────────
   init() {
@@ -370,12 +269,7 @@ class TokenActionBar {
     this.hookIds.deleteItem = Hooks.on("deleteItem", refreshOnItem);
   }
 
-  destroy() {
-    for (const [hook, id] of Object.entries(this.hookIds)) Hooks.off(hook, id);
-    window.removeEventListener("resize", this.onResize);
-    this.bar?.remove();
-    TokenActionBar.instance = null;
-  }
+  // destroy() : hérité de FloatingBar.
 
   // Rafraîchit CFG depuis les réglages (les fonctions de détection lisent CFG).
   readCfg() {
@@ -390,7 +284,7 @@ class TokenActionBar {
       onlyEquippedWeapons: game.settings.get(MODULE_ID, "onlyEquippedWeapons"),
       dedupeByName: game.settings.get(MODULE_ID, "dedupeByName"),
       alwaysShowFeatureNames: names,
-      buttonSize: Number(game.settings.get(MODULE_ID, "buttonSize")) || 42,
+      buttonSize: Number(game.settings.get(MODULE_ID, "tokenButtonSize")) || 42,
     };
   }
 
@@ -550,27 +444,8 @@ class TokenActionBar {
   }
 
   // ── Position ─────────────────────────────────────────────────────────────
-  clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
-  setPos(left, top) {
-    const bw = this.bar.offsetWidth  || 200;
-    const bh = this.bar.offsetHeight || 40;
-    left = this.clamp(left, 4, window.innerWidth  - bw - 4);
-    top  = this.clamp(top,  4, window.innerHeight - bh - 4);
-    this.bar.style.left = `${Math.round(left)}px`;
-    this.bar.style.top  = `${Math.round(top)}px`;
-    this.bar.style.right = this.bar.style.bottom = "auto";
-    this.bar.style.transform = "none";
-  }
-
-  savePos() {
-    const r = this.bar.getBoundingClientRect();
-    localStorage.setItem(this.posKey, JSON.stringify({ left: r.left, top: r.top }));
-  }
-
-  readPos() {
-    try { return JSON.parse(localStorage.getItem(this.posKey)); } catch { return null; }
-  }
+  // clamp / setPos / savePos / readPos / applyPosition / initDrag : hérités de
+  // FloatingBar. onResize et l'ancrage aux bords (applyDockOrFree) sont spécifiques.
 
   // Ancre la barre sur un bord selon le réglage, ou la laisse libre (glisser).
   applyDockOrFree() {
@@ -602,41 +477,13 @@ class TokenActionBar {
     this.setPos(left, top);
   }
 
-  applyPosition() {
-    const saved = this.readPos();
-    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-      return this.setPos(saved.left, saved.top);
-    }
-    const hb = document.getElementById("hotbar");
-    const r  = hb?.getBoundingClientRect();
-    const bw = this.bar.offsetWidth, bh = this.bar.offsetHeight;
-    if (r && r.width) this.setPos(r.left + r.width / 2 - bw / 2, r.top - bh - 8);
-    else this.setPos((window.innerWidth - bw) / 2, window.innerHeight - bh - 90);
-  }
+  // applyPosition() : hérité de FloatingBar (repli au-dessus de la hotbar).
 
+  // onResize : override — respecte l'ancrage aux bords (sinon re-clampe en mode libre).
   onResize() {
     if (!this.bar || this.bar.style.display === "none") return;
     if ((CFG.dockPosition || "bottom-center") !== "free") return this.applyDockOrFree();
     const r = this.bar.getBoundingClientRect();
     this.setPos(r.left, r.top);
-  }
-
-  initDrag(handle) {
-    handle.addEventListener("pointerdown", (ev) => {
-      ev.preventDefault();
-      const r = this.bar.getBoundingClientRect();
-      const offX = ev.clientX - r.left;
-      const offY = ev.clientY - r.top;
-      handle.setPointerCapture(ev.pointerId);
-      const onMove = (e) => this.setPos(e.clientX - offX, e.clientY - offY);
-      const onUp = () => {
-        handle.releasePointerCapture(ev.pointerId);
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        this.savePos();
-      };
-      handle.addEventListener("pointermove", onMove);
-      handle.addEventListener("pointerup", onUp);
-    });
   }
 }
