@@ -21,12 +21,30 @@
   overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Rangée de sections. align-items:flex-end → toutes les rangées d'icônes
+   s'alignent en bas, quelle que soit la présence d'une ligne de libellé. */
 #selected-token-actions .ab-items {
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: flex-end; gap: 6px;
   overflow-x: auto; overflow-y: hidden; padding: 2px;
 }
 #selected-token-actions .ab-items::-webkit-scrollbar { height: 6px; }
 #selected-token-actions .ab-items::-webkit-scrollbar-thumb { background: #666; border-radius: 3px; }
+
+/* Section = colonne : mince ligne de libellé au-dessus, rangée d'icônes dessous.
+   align-items:center → libellé et rangée centrés l'un sur l'autre. */
+#selected-token-actions .ab-section {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 0 0 auto;
+}
+/* Léger séparateur vertical entre sections adjacentes. */
+#selected-token-actions .ab-section + .ab-section {
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding-left: 6px; margin-left: 0;
+}
+
+/* Rangée d'icônes d'une section. */
+#selected-token-actions .ab-row {
+  display: flex; align-items: center; gap: 4px;
+}
 
 #selected-token-actions .ab-btn {
   position: relative; flex: 0 0 auto;
@@ -53,17 +71,18 @@
 }
 #selected-token-actions .ab-btn .ab-badge.ab-badge-empty { color: #ff9a9a; border-color: #b5484a; }
 
-/* En-tête de section (Inventaire, Features, Cantrips, N1…) + compteur de slots. */
+/* Mince ligne de libellé (Armes, Features, Cantrips, N1…) + compteur de slots,
+   posée au-dessus de la rangée d'icônes de sa section et centrée sur celle-ci. */
 #selected-token-actions .ab-group {
-  display: flex; align-items: center; gap: 4px; align-self: stretch;
-  padding: 0 2px; white-space: nowrap;
-  font-size: 10px; font-weight: bold; color: #cfcfcf;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  height: 12px; line-height: 12px; padding: 0 2px; white-space: nowrap;
+  font-size: 9px; font-weight: bold; color: #bdbdbd;
   text-transform: uppercase; letter-spacing: .3px;
 }
 #selected-token-actions .ab-group .ab-slot {
-  font-size: 11px; font-weight: bold; color: #ffd479;
-  background: rgba(0, 0, 0, 0.45); border: 1px solid #555; border-radius: 8px;
-  padding: 0 5px; text-transform: none; font-variant-numeric: tabular-nums;
+  font-size: 10px; font-weight: bold; color: #ffd479; line-height: 11px;
+  background: rgba(0, 0, 0, 0.45); border: 1px solid #555; border-radius: 7px;
+  padding: 0 4px; text-transform: none; font-variant-numeric: tabular-nums;
 }
 
 #selected-token-actions .ab-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
@@ -79,3 +98,18 @@
 /* ── État minimisé : ne restent que la poignée + le toggle ────────────────────── */
 #selected-token-actions.ab-collapsed { gap: 2px; padding: 3px 5px; }
 #selected-token-actions.ab-collapsed .ab-collapsible { display: none; }
+
+/* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
+#selected-token-actions.ab-vertical { flex-direction: column; align-items: center; }
+#selected-token-actions.ab-vertical .ab-label { margin-right: 0; }
+#selected-token-actions.ab-vertical .ab-items {
+  flex-direction: column; align-items: center;
+  overflow-x: hidden; overflow-y: auto; max-height: 74vh;
+}
+/* Chaque section empile ses boutons en colonne → une seule colonne d'icônes. */
+#selected-token-actions.ab-vertical .ab-row { flex-direction: column; }
+#selected-token-actions.ab-vertical .ab-items::-webkit-scrollbar { width: 6px; height: auto; }
+#selected-token-actions.ab-vertical .ab-section + .ab-section {
+  border-left: none; padding-left: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 6px;
+}

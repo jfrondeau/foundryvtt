@@ -80,8 +80,31 @@ Hooks.once("init", () => {
 
   game.settings.register(MODULE_ID, "showGroupLabels", {
     name: "Afficher les en-têtes de groupe",
-    hint: "Petits libellés de section (Inventaire, Features, Cantrips, N1…) et compteurs d'emplacements.",
+    hint: "Mince ligne de libellés de section (Armes, Features, Cantrips, N1…) et compteurs d'emplacements, au-dessus des icônes.",
     scope: "client", config: true, type: Boolean, default: true,
+    onChange: reRender,
+  });
+
+  game.settings.register(MODULE_ID, "dockPosition", {
+    name: "Ancrage de la barre",
+    hint: "Ancre la barre sur un bord de l'écran (la poignée de déplacement est alors masquée). « Libre » = glisser-déposer, position mémorisée.",
+    scope: "client", config: true, type: String,
+    choices: {
+      free: "Libre (glisser-déposer)",
+      "bottom-left": "Bas · gauche",
+      "bottom-center": "Bas · centre",
+      "bottom-right": "Bas · droite",
+      "top-left": "Haut · gauche",
+      "top-center": "Haut · centre",
+      "top-right": "Haut · droite",
+      "left-top": "Gauche · haut",
+      "left-center": "Gauche · centre",
+      "left-bottom": "Gauche · bas",
+      "right-top": "Droite · haut",
+      "right-center": "Droite · centre",
+      "right-bottom": "Droite · bas",
+    },
+    default: "bottom-center",
     onChange: reRender,
   });
 
@@ -351,6 +374,7 @@ class TokenActionBar {
       includeFeatures:  game.settings.get(MODULE_ID, "includeFeatures"),
       includeSpells:    game.settings.get(MODULE_ID, "includeSpells"),
       showGroupLabels:  game.settings.get(MODULE_ID, "showGroupLabels"),
+      dockPosition:     game.settings.get(MODULE_ID, "dockPosition") || "bottom-center",
       onlyEquippedWeapons: game.settings.get(MODULE_ID, "onlyEquippedWeapons"),
       dedupeByName: game.settings.get(MODULE_ID, "dedupeByName"),
       alwaysShowFeatureNames: names,
@@ -373,12 +397,13 @@ class TokenActionBar {
     const actor = token.actor;
     this.bar.style.display = "flex";
 
-    // Poignée de déplacement.
+    // Poignée de déplacement (masquée quand la barre est ancrée).
     const handle = document.createElement("i");
     handle.className = "fas fa-grip-vertical ab-handle";
     handle.dataset.tooltip = "Glisser pour déplacer la barre";
     this.initDrag(handle);
     this.bar.appendChild(handle);
+    this.handle = handle;
 
     // Libellé (repliable).
     const label = document.createElement("div");
@@ -440,8 +465,12 @@ class TokenActionBar {
 
     this.bar.classList.toggle("ab-collapsed", collapsed);
 
+    // Orientation selon l'ancrage.
+    const dock = CFG.dockPosition;
+    this.bar.classList.toggle("ab-vertical", dock.startsWith("left") || dock.startsWith("right"));
+
     // Placement une fois le contenu construit (dimensions connues).
-    this.applyPosition();
+    this.applyDockOrFree();
   }
 
   makeButton(item, cssClass, actor) {
@@ -482,8 +511,8 @@ class TokenActionBar {
     if (icon) icon.className = `fas fa-chevron-${on ? "right" : "left"}`;
     const toggle = this.bar.querySelector(".ab-toggle");
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
-    const r = this.bar.getBoundingClientRect();
-    this.setPos(r.left, r.top);
+    // Ré-ancre (ou re-clampe en mode libre) après le changement de dimensions.
+    this.applyDockOrFree();
   }
 
   // ── Position ─────────────────────────────────────────────────────────────
@@ -509,6 +538,36 @@ class TokenActionBar {
     try { return JSON.parse(localStorage.getItem(this.posKey)); } catch { return null; }
   }
 
+  // Ancre la barre sur un bord selon le réglage, ou la laisse libre (glisser).
+  applyDockOrFree() {
+    const dock = CFG.dockPosition || "bottom-center";
+    if (dock === "free") {
+      if (this.handle) this.handle.style.display = "";
+      return this.applyPosition();
+    }
+    if (this.handle) this.handle.style.display = "none";
+
+    const m = 8;
+    const bw = this.bar.offsetWidth, bh = this.bar.offsetHeight;
+    const W = window.innerWidth, H = window.innerHeight;
+    const [edge, align] = dock.split("-");
+    let left, top;
+
+    if (edge === "bottom" || edge === "top") {
+      top = edge === "top" ? m : H - bh - m;
+      left = align === "left" ? m : align === "right" ? W - bw - m : (W - bw) / 2;
+      // Bas-centre : se caler au-dessus de la hotbar plutôt que de la recouvrir.
+      if (edge === "bottom" && align === "center") {
+        const hb = document.getElementById("hotbar")?.getBoundingClientRect();
+        if (hb && hb.width) top = hb.top - bh - m;
+      }
+    } else { // gauche / droite : barre verticale
+      left = edge === "left" ? m : W - bw - m;
+      top = align === "top" ? m : align === "bottom" ? H - bh - m : (H - bh) / 2;
+    }
+    this.setPos(left, top);
+  }
+
   applyPosition() {
     const saved = this.readPos();
     if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
@@ -523,6 +582,7 @@ class TokenActionBar {
 
   onResize() {
     if (!this.bar || this.bar.style.display === "none") return;
+    if ((CFG.dockPosition || "bottom-center") !== "free") return this.applyDockOrFree();
     const r = this.bar.getBoundingClientRect();
     this.setPos(r.left, r.top);
   }
