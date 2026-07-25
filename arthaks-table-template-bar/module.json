@@ -1,6 +1,6 @@
 {
-  "id": "spell-template-bar",
-  "title": "Spell Template Bar",
+  "id": "arthaks-table-template-bar",
+  "title": "Arthak's Table Template bar",
   "description": "Barre flottante de gabarits de sort (via le mode gabarit Regions de dnd5e), affichée automatiquement pour tous les joueurs, avec un mode immersif masquant le reste de l'interface.",
   "version": "1.0.0",
   "authors": [

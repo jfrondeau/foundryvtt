@@ -26,7 +26,7 @@
  * reste de l'interface pour les joueurs, ne laissant que cette barre + le canvas.
  */
 
-const MODULE_ID = "spell-template-bar";
+const MODULE_ID = "arthaks-table-template-bar";
 const NS = MODULE_ID;
 
 const notify = {

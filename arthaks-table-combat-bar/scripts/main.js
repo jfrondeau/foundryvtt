@@ -30,7 +30,7 @@
  *  - Bouton ⟨ / ⟩ : minimise / ré-étend (état mémorisé par utilisateur).
  */
 
-const MODULE_ID = "combat-overlay";
+const MODULE_ID = "arthaks-table-combat-bar";
 const NS = MODULE_ID;
 
 const notify = {
@@ -111,6 +111,16 @@ Hooks.once("init", () => {
     restricted: true,
     onDown: () => CombatOverlay.advanceTurn(-1),
   });
+
+  // « / » : place le curseur dans le champ PV du panneau cible (saisie clavier
+  // rapide à la table). Cible : les tokens ciblés (T), sinon le token sélectionné.
+  game.keybindings.register(MODULE_ID, "focusHp", {
+    name: "Combat : modifier les PV de la cible",
+    hint: "Place le curseur dans le champ PV du panneau cible. Entrer « 8 » (dégâts) ou « +8 » (soin), puis Entrée.",
+    editable: [{ key: "Slash" }],
+    restricted: true,
+    onDown: () => CombatOverlay.focusHp(),
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -137,6 +147,20 @@ class CombatOverlay {
     if (!combat || !game.user.isGM) return false;
     if (dir < 0) combat.previousTurn();
     else combat.nextTurn();
+    return true;
+  }
+
+  /** Place le focus dans le champ PV du panneau cible (raccourci « / »). */
+  static focusHp() {
+    const inst = CombatOverlay.instance;
+    if (!inst?.root) return false;
+    // Ne pas capter la touche quand on tape déjà dans un champ.
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return false;
+    const input = inst.root.querySelector(".co-hp-edit");
+    if (!input) { notify.warn("Aucune cible : cible un token (T) ou sélectionne-le."); return false; }
+    input.focus();
+    input.select?.();
     return true;
   }
 
@@ -178,6 +202,11 @@ class CombatOverlay {
     this.hookIds.updateToken = Hooks.on("updateToken", (doc, changes) => {
       if ("hidden" in changes) rerender();
     });
+    // Panneau cible : se rafraîchit quand la cible (T) ou la sélection changent,
+    // et quand les PV d'un acteur bougent (badges CA/PV à jour).
+    this.hookIds.targetToken  = Hooks.on("targetToken", rerender);
+    this.hookIds.controlToken = Hooks.on("controlToken", rerender);
+    this.hookIds.updateActor  = Hooks.on("updateActor", rerender);
   }
 
   destroy() {
@@ -235,7 +264,8 @@ class CombatOverlay {
     // Ne pas reconstruire pendant une saisie d'initiative : la mise à jour d'un
     // autre client ne doit pas détruire le champ en cours d'édition (perte de focus).
     const active = document.activeElement;
-    if (active && root.contains(active) && active.classList.contains("co-init-edit")) return;
+    if (active && root.contains(active) &&
+        (active.classList.contains("co-init-edit") || active.classList.contains("co-hp-edit"))) return;
 
     root.innerHTML = "";
 
@@ -314,7 +344,182 @@ class CombatOverlay {
     const featured = markerId ? visible.find(c => c.id === markerId) : null;
     if (featured) body.appendChild(this.renderSpotlight(featured));
 
+    // Panneau cible : image(s) + CA/PV + champ PV. Cible = tokens ciblés (T),
+    // sinon token(s) sélectionné(s). Affiché seulement s'il y a une victime.
+    const victims = this.resolveVictims();
+    if (victims.length) body.appendChild(this.renderTargetPanel(victims));
+
     root.appendChild(body);
+  }
+
+  /** Victimes qui recevront les PV : cibles (T) en priorité, sinon sélection. */
+  resolveVictims() {
+    const targets = Array.from(game.user.targets ?? []);
+    if (targets.length) return targets;
+    return Array.from(canvas.tokens?.controlled ?? []);
+  }
+
+  /** Panneau cible : vignette(s) + CA/PV + champ PV partagé (applique à toutes). */
+  renderTargetPanel(victims) {
+    const panel = document.createElement("div");
+    panel.className = "co-targets";
+
+    const title = document.createElement("div");
+    title.className = "co-targets-title";
+    title.innerHTML = `<i class="fas fa-crosshairs"></i> ${victims.length > 1 ? `Cibles (${victims.length})` : "Cible"}`;
+    panel.appendChild(title);
+
+    const list = document.createElement("div");
+    list.className = "co-target-list";
+    for (const token of victims) list.appendChild(this.renderTargetCard(token));
+    panel.appendChild(list);
+
+    const input = document.createElement("input");
+    input.className = "co-hp-edit";
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.placeholder = "Δ PV  ( / )";
+    input.dataset.tooltip = "8 = dégâts · +8 = soin · Entrée pour appliquer";
+    input.addEventListener("click", (ev) => ev.stopPropagation());
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const value = input.value;
+        input.value = "";
+        this.applyHpToVictims(value).finally(() => input.blur());
+      } else if (ev.key === "Escape") {
+        input.value = "";
+        input.blur();
+      }
+    });
+    panel.appendChild(input);
+    return panel;
+  }
+
+  /** Une vignette de cible : image + nom + badges CA/PV (MJ). */
+  renderTargetCard(token) {
+    const card = document.createElement("div");
+    card.className = "co-target";
+    const isNPC = !token.actor?.hasPlayerOwner;
+    card.classList.toggle("co-pc", !isNPC);
+    card.classList.toggle("co-npc", isNPC);
+
+    const img = document.createElement("img");
+    img.className = "co-target-img";
+    img.src = this.imgForToken(token);
+    img.alt = token.name;
+    card.appendChild(img);
+
+    const name = document.createElement("div");
+    name.className = "co-target-name";
+    name.textContent = token.name;
+    card.appendChild(name);
+
+    // CA / PV sous la cible (MJ uniquement).
+    if (game.user.isGM) {
+      const stats = this.actorStats(token.actor);
+      if (stats.length) {
+        const meta = document.createElement("div");
+        meta.className = "co-target-stats co-spot-stats";
+        for (const s of stats) {
+          const badge = document.createElement("span");
+          badge.className = `co-stat co-stat-${s.key}`;
+          badge.innerHTML = `<i class="${s.icon}"></i>`;
+          badge.appendChild(document.createTextNode(` ${s.value}`));
+          meta.appendChild(badge);
+        }
+        card.appendChild(meta);
+      }
+    }
+
+    // Double-clic → feuille de l'acteur (pas de clic simple : ne pas voler la sélection).
+    card.addEventListener("dblclick", () => {
+      if (token.actor?.testUserPermission(game.user, "LIMITED")) token.actor.sheet?.render(true);
+    });
+    return card;
+  }
+
+  /**
+   * Applique un delta PV aux victimes via le moteur natif dnd5e (applyDamage :
+   * gère PV temporaires). Convention de saisie identique à TokenHp.js :
+   * « 8 » = dégâts, « +8 » = soin, « -8 » = dégâts.
+   */
+  async applyHpToVictims(rawValue) {
+    const raw = String(rawValue).trim();
+    if (!raw) return;
+    const hasSign = raw.startsWith("+") || raw.startsWith("-");
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) { notify.warn("Valeur PV invalide (ex : 8, +8, -8)."); return; }
+    // Delta signé (négatif = dégâts) puis conversion applyDamage (positif = dégâts).
+    const delta = hasSign ? parsed : -Math.abs(parsed);
+    if (delta === 0) return;
+    const amount = -delta;
+
+    const victims = this.resolveVictims();
+    if (!victims.length) { notify.warn("Aucune cible."); return; }
+
+    const log = [];
+    const dead = [];
+    for (const token of victims) {
+      const actor = token.actor;
+      if (!actor) { notify.warn(`"${token.name}" sans acteur, ignoré.`); continue; }
+      if (typeof actor.applyDamage !== "function") { notify.warn(`applyDamage indisponible sur "${token.name}".`); continue; }
+      if (!actor.isOwner) { notify.warn(`Pas de permission sur "${token.name}".`); continue; }
+      const before = actor.system?.attributes?.hp?.value;
+      try {
+        await actor.applyDamage(amount);
+        const after = actor.system?.attributes?.hp?.value;
+        log.push(`${token.name}: ${before}→${after}`);
+        // Statut Dead auto : appliqué si le solde < 1, retiré si les PV remontent.
+        const dying = Number(after) < 1;
+        const wasDead = this.hasDeadStatus(token);
+        if (dying && !wasDead) { await this.setDeadStatus(token, true); dead.push(token.name); }
+        else if (!dying && wasDead) await this.setDeadStatus(token, false);
+      } catch (err) {
+        notify.warn(`Échec PV sur "${token.name}".`);
+        console.error(err);
+      }
+    }
+    if (log.length) notify.info(`${delta < 0 ? "💀 Dégâts" : "💚 Soin"} [${delta > 0 ? "+" : ""}${delta}] : ${log.join(" | ")}`);
+    if (dead.length) notify.warn(`☠️ Mort : ${dead.join(", ")}`);
+  }
+
+  /** Le token (ou son acteur) porte-t-il le statut « dead » ? */
+  hasDeadStatus(token) {
+    if (token.document?.statuses?.has("dead")) return true;
+    return token.actor?.effects?.some(
+      e => e.statuses?.has("dead") || e.flags?.core?.statusId === "dead"
+    ) ?? false;
+  }
+
+  /**
+   * Applique / retire le statut « dead » (overlay tête de mort) sur l'acteur du token.
+   * Repris de TokenHp.js, priorité à l'API moderne dnd5e/Foundry v14.
+   */
+  async setDeadStatus(token, active) {
+    const actor = token.actor;
+    if (!actor) return;
+    // Foundry v11+/dnd5e : voie canonique.
+    if (typeof actor.toggleStatusEffect === "function") {
+      await actor.toggleStatusEffect("dead", { active, overlay: active });
+      return;
+    }
+    // Fallback : ActiveEffect manuel.
+    const existing = actor.effects.find(
+      e => e.statuses?.has("dead") || e.flags?.core?.statusId === "dead"
+    );
+    if (active && !existing) {
+      const effectData = CONFIG.statusEffects.find(e => e.id === "dead")
+        ?? { name: "Dead", img: "icons/svg/skull.svg" };
+      await actor.createEmbeddedDocuments("ActiveEffect", [{
+        name: effectData.name ?? "Dead",
+        img:  effectData.img  ?? "icons/svg/skull.svg",
+        statuses: ["dead"],
+        flags: { core: { statusId: "dead", overlay: true } },
+      }]);
+    } else if (!active && existing) {
+      await existing.delete();
+    }
   }
 
   renderRow(c, isCurrent) {
@@ -405,7 +610,7 @@ class CombatOverlay {
 
     // Infos MJ (CA / PV) — visibles du MJ uniquement, si l'acteur les expose.
     if (game.user.isGM) {
-      const stats = this.gmStats(c);
+      const stats = this.actorStats(c.actor);
       if (stats.length) {
         const meta = document.createElement("div");
         meta.className = "co-spot-stats";
@@ -426,9 +631,9 @@ class CombatOverlay {
     return spot;
   }
 
-  /** Stats MJ à afficher pour un combattant (dnd5e), tolérant aux données manquantes. */
-  gmStats(c) {
-    const sys = c.actor?.system;
+  /** Stats MJ à afficher pour un acteur (dnd5e), tolérant aux données manquantes. */
+  actorStats(actor) {
+    const sys = actor?.system;
     if (!sys) return [];
     const out = [];
     const ac = sys.attributes?.ac?.value;
@@ -462,6 +667,19 @@ class CombatOverlay {
     let src = mode === "token" ? (token || actor) : (actor || token);
     if (!src || VIDEO_RE.test(src)) {
       const alt = mode === "token" ? actor : token;
+      src = (alt && !VIDEO_RE.test(alt)) ? alt : MYSTERY_MAN;
+    }
+    return src;
+  }
+
+  /** Comme imgFor, mais pour un Token placé sur la scène (cible / sélection). */
+  imgForToken(token) {
+    const mode = game.settings.get(MODULE_ID, "imageMode");
+    const tokenSrc = token.document?.texture?.src;
+    const actorSrc = token.actor?.img;
+    let src = mode === "token" ? (tokenSrc || actorSrc) : (actorSrc || tokenSrc);
+    if (!src || VIDEO_RE.test(src)) {
+      const alt = mode === "token" ? actorSrc : tokenSrc;
       src = (alt && !VIDEO_RE.test(alt)) ? alt : MYSTERY_MAN;
     }
     return src;
