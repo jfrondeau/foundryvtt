@@ -2,7 +2,7 @@
   "id": "arthaks-table-combat-bar",
   "title": "Arthak's Table Combat bar",
   "description": "Suivi de combat compact, superposé à la scène et visible sur la table. Affiché automatiquement dès qu'un combat est actif : liste des participants (portrait ou token), PJ et monstres distingués, marqueur sur le combattant courant dont le token est sélectionné/centré, manche + initiative de tous. Boutons MJ pour rouler l'initiative des monstres et saisir manuellement celle des PJ. Raccourci « . » pour passer au tour suivant.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "authors": [
     { "name": "jfrondeau" }
   ],

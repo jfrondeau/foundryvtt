@@ -5,22 +5,21 @@
  * table. Il s'affiche AUTOMATIQUEMENT dès qu'un combat est actif (encounter créé
  * avec au moins un combattant) et reste visible pour TOUS les utilisateurs.
  *
- * Affichage :
- *  - En-tête : « Manche N » (ou « Préparation » avant le début) + boutons MJ.
- *  - Une ligne par combattant : marqueur ▶ sur le courant, portrait (ou image de
- *    token, réglable), nom, initiative. Fond différent PJ / monstre.
+ * Deux vues selon la phase (empreinte minimale sur la carte) :
+ *  - « Setup » (Préparation, ou édition manuelle relancée en combat via ⋮) : liste
+ *    large — vignette + nom + initiative ÉDITABLE — plus les contrôles de mise en
+ *    place (rouler l'init des monstres, Commencer / Terminer, Fermer l'édition).
+ *  - « Combat » : RAIL fin de vignettes (anneau PV coloré, ☠ si mort), le courant
+ *    agrandi avec halo ember ; à côté, la carte du courant (grand portrait + CA/PV)
+ *    et le panneau cible (T). L'initiative est masquée par défaut une fois lancé.
  *  - Les combattants cachés ne sont visibles que du MJ (grisés).
  *
- * Automatisations au changement de tour :
- *  - Le token du combattant courant est SÉLECTIONNÉ (pour qui le possède : le MJ
- *    voit chaque token, un joueur voit le sien à son tour).
- *  - La caméra se CENTRE sur ce token (MJ uniquement, pour piloter la vue de table).
+ * Réglages notables (client) : afficher les portraits, masquer l'init en combat,
+ * afficher le bouton « Tour suivant » (off par défaut : le raccourci « . » suffit).
  *
- * Aide au MJ en début de combat :
- *  - Bouton « dé » : roule l'initiative de tous les MONSTRES d'un clic (rollNPC).
- *  - Chaque ligne de PJ expose un champ d'initiative éditable → saisie manuelle
- *    rapide au clavier (le MJ possède tout ; un joueur édite la sienne).
- *  - Bouton « play / tour suivant » selon l'état du combat.
+ * Automatisations au changement de tour :
+ *  - Le token du combattant courant est SÉLECTIONNÉ (pour qui le possède).
+ *  - La caméra se CENTRE sur ce token (MJ uniquement, pour piloter la vue de table).
  *
  * Raccourci clavier : « . » (Period) passe au tour suivant (réservé au MJ, qui
  * pilote le combat). « , » (Comma) revient au tour précédent (non lié par défaut).
@@ -56,23 +55,53 @@ Hooks.once("init", () => {
     onChange: () => CombatOverlay.instance?.sync(),
   });
 
+  game.settings.register(MODULE_ID, "showImages", {
+    name: "Afficher les portraits",
+    hint: "Rail avec les images des combattants (créature / personnage). Désactivé : pastilles compactes avec initiales.",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => CombatOverlay.instance?.sync(),
+  });
+
+  game.settings.register(MODULE_ID, "hideInitInCombat", {
+    name: "Masquer l'initiative en combat",
+    hint: "L'initiative n'est utile qu'au réglage : on la masque une fois le combat lancé (rééditable via le bouton d'options ⋮). Désactivé : petit chiffre dans le coin de la vignette.",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => CombatOverlay.instance?.sync(),
+  });
+
+  game.settings.register(MODULE_ID, "showNextButton", {
+    name: "Afficher le bouton « Tour suivant »",
+    hint: "Ajoute un bouton de passage au tour suivant dans l'en-tête. Désactivé par défaut : le raccourci « . » suffit.",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange: () => CombatOverlay.instance?.sync(),
+  });
+
   game.settings.register(MODULE_ID, "rowSize", {
-    name: "Taille des lignes (px)",
-    hint: "Hauteur des vignettes des lignes de la liste (petites).",
+    name: "Taille des vignettes du rail (px)",
+    hint: "Diamètre des vignettes de combattants dans le rail.",
     scope: "client",
     config: true,
     type: Number,
-    default: 34,
+    default: 46,
     onChange: () => CombatOverlay.instance?.applySizes(),
   });
 
   game.settings.register(MODULE_ID, "currentImageSize", {
-    name: "Taille de l'image du combattant courant (px)",
-    hint: "Grande image du combattant courant, affichée à droite de la liste (env. 4 lignes par défaut).",
+    name: "Taille du portrait du combattant courant (px)",
+    hint: "Grand portrait du combattant courant (et des cibles), affiché à côté du rail.",
     scope: "client",
     config: true,
     type: Number,
-    default: 140,
+    default: 132,
     onChange: () => CombatOverlay.instance?.applySizes(),
   });
 
@@ -172,6 +201,7 @@ class CombatOverlay {
   constructor() {
     this.root = null;
     this.hookIds = {};
+    this.editMode = false;              // édition manuelle de l'init en cours de combat (bouton ⋮)
     this._lastTurnId = null;            // id du combattant courant au dernier rendu
     this._lastVisibleCurrentId = null;  // dernier combattant courant VISIBLE (pour ce user)
     this.onResize = this.onResize.bind(this);
@@ -229,9 +259,13 @@ class CombatOverlay {
     if (!visible) {
       this._lastTurnId = null;
       this._lastVisibleCurrentId = null;
+      this.editMode = false;
       if (this.root) this.root.style.display = "none";
       return;
     }
+
+    // Le mode édition n'a de sens qu'une fois le combat lancé.
+    if (!combat.started) this.editMode = false;
 
     this.mount();
     this.root.style.display = "";
@@ -263,18 +297,65 @@ class CombatOverlay {
   }
 
   // ── Rendu ────────────────────────────────────────────────────────────────
+  /**
+   * Deux vues selon la phase :
+   *  - « setup » (préparation, ou édition manuelle en cours de combat) : liste large
+   *    avec initiative éditable + contrôles de mise en place.
+   *  - « combat » : rail fin de vignettes + carte du courant (et de la cible).
+   */
   render(combat) {
     const root = this.root;
 
-    // Ne pas reconstruire pendant une saisie d'initiative : la mise à jour d'un
-    // autre client ne doit pas détruire le champ en cours d'édition (perte de focus).
+    // Ne pas reconstruire pendant une saisie (init / PV) : éviter la perte de focus
+    // quand un autre client déclenche un rafraîchissement.
     const active = document.activeElement;
     if (active && root.contains(active) &&
         (active.classList.contains("co-init-edit") || active.classList.contains("co-hp-edit"))) return;
 
-    root.innerHTML = "";
+    const started = !!combat.started;
+    const editing = started && this.editMode;
+    const setupView = !started || editing;
 
-    // En-tête : poignée + manche + boutons MJ + toggle.
+    root.classList.toggle("co-noimg", !game.settings.get(MODULE_ID, "showImages"));
+    root.classList.toggle("co-setup", setupView);
+    root.classList.toggle("co-combat", !setupView);
+
+    root.innerHTML = "";
+    root.appendChild(this.renderHeader(combat, started, editing));
+
+    const visible = this.visibleCombatants(combat);
+    const markerId = this.resolveMarkerId(combat, visible);
+
+    const body = document.createElement("div");
+    body.className = "co-body co-collapsible";
+
+    if (setupView) {
+      body.appendChild(this.renderEditList(visible, markerId));
+    } else {
+      body.appendChild(this.renderRail(visible, markerId));
+      const detail = this.renderDetail(visible, markerId);
+      if (detail) body.appendChild(detail);
+    }
+
+    root.appendChild(body);
+  }
+
+  /**
+   * Marqueur ▶ : combattant courant s'il est visible. Si le courant est caché
+   * (monstre invisible côté joueur), on conserve le dernier courant visible.
+   */
+  resolveMarkerId(combat, visible) {
+    const visibleIds = new Set(visible.map(c => c.id));
+    const actualCurrentId = combat.started ? (combat.combatant?.id ?? null) : null;
+    if (actualCurrentId && visibleIds.has(actualCurrentId)) {
+      this._lastVisibleCurrentId = actualCurrentId;
+      return actualCurrentId;
+    }
+    if (combat.started && visibleIds.has(this._lastVisibleCurrentId)) return this._lastVisibleCurrentId;
+    return null;
+  }
+
+  renderHeader(combat, started, editing) {
     const header = document.createElement("div");
     header.className = "co-header";
 
@@ -286,75 +367,250 @@ class CombatOverlay {
 
     const round = document.createElement("div");
     round.className = "co-round";
-    round.textContent = combat.started ? `Round ${combat.round}` : "Préparation";
+    round.textContent = !started ? "Préparation" : (editing ? `Édition · Manche ${combat.round}` : `Manche ${combat.round}`);
     header.appendChild(round);
 
-    if (game.user.isGM) {
-      // Rouler l'initiative des monstres.
-      const rollBtn = this.makeBtn("fas fa-dice-d20", "Rouler l'initiative des monstres", () => {
-        combat.rollNPC();
-      });
-      header.appendChild(rollBtn);
-
-      // Commencer / tour suivant selon l'état.
-      if (!combat.started) {
-        header.appendChild(this.makeBtn("fas fa-play", "Commencer le combat", () => combat.startCombat()));
-      } else {
+    // Combat : bouton d'options ⋮ (bascule combat ↔ édition) + éventuel tour suivant.
+    if (game.user.isGM && started) {
+      if (!editing && game.settings.get(MODULE_ID, "showNextButton")) {
         header.appendChild(this.makeBtn("fas fa-forward-step", "Tour suivant ( . )", () => combat.nextTurn()));
       }
-
-      // Terminer le combat (confirmation).
-      const endBtn = this.makeBtn("fas fa-flag-checkered", "Terminer le combat", () => this.endCombat(combat));
-      endBtn.classList.add("co-btn-end");
-      header.appendChild(endBtn);
+      const edit = this.makeBtn("fas fa-sliders", editing ? "Revenir au combat" : "Modifier l'initiative / options", () => this.toggleEdit());
+      edit.classList.toggle("co-active", editing);
+      header.appendChild(edit);
     }
 
-    // Toggle minimiser (toujours à droite de l'en-tête).
+    // Toggle minimiser (toujours à droite).
     const toggle = document.createElement("div");
     toggle.className = "co-toggle";
-    const collapsed = root.classList.contains("co-collapsed");
+    const collapsed = this.root.classList.contains("co-collapsed");
     toggle.dataset.tooltip = collapsed ? "Ré-étendre" : "Minimiser";
     toggle.innerHTML = `<i class="fas fa-chevron-${collapsed ? "down" : "up"}"></i>`;
     toggle.addEventListener("click", () => this.toggleCollapsed());
     header.appendChild(toggle);
 
-    root.appendChild(header);
+    return header;
+  }
 
-    // Marqueur ▶ : sur le combattant courant s'il est visible pour cet utilisateur.
-    // Si le courant est caché (ex. monstre invisible côté joueur), on CONSERVE le
-    // marqueur sur le dernier combattant visible qui l'avait, plutôt que de l'effacer.
-    const visible = this.visibleCombatants(combat);
-    const visibleIds = new Set(visible.map(c => c.id));
-    const actualCurrentId = combat.started ? (combat.combatant?.id ?? null) : null;
+  // ── Vue « setup » : liste large, initiative éditable ──────────────────────
+  renderEditList(visible, markerId) {
+    const wrap = document.createElement("div");
+    wrap.className = "co-editlist";
 
-    let markerId = null;
-    if (actualCurrentId && visibleIds.has(actualCurrentId)) {
-      markerId = actualCurrentId;
-      this._lastVisibleCurrentId = actualCurrentId;
-    } else if (combat.started && visibleIds.has(this._lastVisibleCurrentId)) {
-      markerId = this._lastVisibleCurrentId;
-    }
+    // Contrôles fixes en haut, puis la liste des combattants (seule à défiler).
+    const ctl = this.renderSetupControls();
+    if (ctl) wrap.appendChild(ctl);
 
-    // Corps : liste compacte à gauche, grande image du courant à droite.
-    const body = document.createElement("div");
-    body.className = "co-body co-collapsible";
-
-    const list = document.createElement("div");
-    list.className = "co-list";
+    const rows = document.createElement("div");
+    rows.className = "co-erows";
     for (const c of visible) {
-      list.appendChild(this.renderRow(c, c.id === markerId));
+      const row = document.createElement("div");
+      row.className = "co-erow";
+      row.classList.toggle("co-current", c.id === markerId);
+      row.classList.toggle("co-pc", !c.isNPC);
+      row.classList.toggle("co-npc", c.isNPC);
+      row.classList.toggle("co-hidden", !!c.hidden);
+      row.classList.toggle("co-dead", this.combatantDead(c));
+      row.dataset.combatantId = c.id;
+
+      row.appendChild(this.thumbEl(c, { ember: c.id === markerId }));
+
+      const name = document.createElement("div");
+      name.className = "co-ename";
+      name.textContent = c.name;
+      row.appendChild(name);
+
+      row.appendChild(this.renderInit(c));
+
+      row.addEventListener("click", (ev) => { if (ev.target.closest("input")) return; this.focusToken(c); });
+      row.addEventListener("dblclick", (ev) => { if (ev.target.closest("input")) return; this.openSheet(c); });
+      rows.appendChild(row);
     }
-    body.appendChild(list);
+    wrap.appendChild(rows);
+    return wrap;
+  }
+
+  /** Contrôles de mise en place (MJ) : 3 petits boutons icônes sur une ligne (tooltip). */
+  renderSetupControls() {
+    if (!game.user.isGM) return null;
+    const combat = this.combat;
+    if (!combat) return null;
+
+    const ctl = document.createElement("div");
+    ctl.className = "co-ctl";
+    ctl.appendChild(this.makeBtn("fas fa-dice-d20", "Rouler l'init des monstres", () => combat.rollNPC()));
+    if (!combat.started) {
+      const start = this.makeBtn("fas fa-play", "Commencer le combat", () => combat.startCombat());
+      start.classList.add("co-btn-start");
+      ctl.appendChild(start);
+    } else {
+      const end = this.makeBtn("fas fa-flag-checkered", "Terminer le combat", () => this.endCombat(combat));
+      end.classList.add("co-btn-end");
+      ctl.appendChild(end);
+    }
+    return ctl;
+  }
+
+  toggleEdit() {
+    this.editMode = !this.editMode;
+    if (this.combat) this.render(this.combat);
+  }
+
+  // ── Vue « combat » : rail fin + carte de détail ───────────────────────────
+  renderRail(visible, markerId) {
+    const rail = document.createElement("div");
+    rail.className = "co-rail";
+    const showInit = !game.settings.get(MODULE_ID, "hideInitInCombat");
+
+    for (const c of visible) {
+      const item = document.createElement("div");
+      item.className = "co-thumbwrap";
+      item.classList.toggle("co-current", c.id === markerId);
+      item.classList.toggle("co-pc", !c.isNPC);
+      item.classList.toggle("co-npc", c.isNPC);
+      item.classList.toggle("co-hidden", !!c.hidden);
+      item.classList.toggle("co-dead", this.combatantDead(c));
+      item.dataset.combatantId = c.id;
+
+      const thumb = this.thumbEl(c, { ember: c.id === markerId });
+      if (showInit) {
+        const gem = document.createElement("div");
+        gem.className = "co-initgem";
+        gem.textContent = (c.initiative ?? "–");
+        thumb.appendChild(gem);
+      }
+      item.appendChild(thumb);
+
+      item.dataset.tooltip = c.name;
+      item.addEventListener("click", () => this.focusToken(c));
+      item.addEventListener("dblclick", () => this.openSheet(c));
+      rail.appendChild(item);
+    }
+    return rail;
+  }
+
+  /** Panneau de détail à côté du rail : carte du courant + panneau cible. */
+  renderDetail(visible, markerId) {
+    const detail = document.createElement("div");
+    detail.className = "co-detail";
 
     const featured = markerId ? visible.find(c => c.id === markerId) : null;
-    if (featured) body.appendChild(this.renderSpotlight(featured));
+    if (featured) detail.appendChild(this.renderCurrentCard(featured));
 
-    // Panneau cible : image(s) + CA/PV + champ PV. Cible = tokens ciblés (T),
-    // sinon token(s) sélectionné(s). Affiché seulement s'il y a une victime.
     const victims = this.resolveVictims();
-    if (victims.length) body.appendChild(this.renderTargetPanel(victims));
+    if (victims.length) detail.appendChild(this.renderTargetPanel(victims));
 
-    root.appendChild(body);
+    return detail.children.length ? detail : null;
+  }
+
+  /** Carte du combattant courant : grand portrait + nom + stats (remplace le spotlight). */
+  renderCurrentCard(c) {
+    const card = document.createElement("div");
+    card.className = "co-card co-current-card";
+    card.classList.toggle("co-pc", !c.isNPC);
+    card.classList.toggle("co-npc", c.isNPC);
+    card.dataset.combatantId = c.id;
+
+    if (game.settings.get(MODULE_ID, "showImages")) {
+      const p = document.createElement("div");
+      p.className = "co-portrait";
+      const img = document.createElement("img");
+      img.src = this.imgFor(c);
+      img.alt = c.name;
+      p.appendChild(img);
+      const lbl = document.createElement("span");
+      lbl.className = "co-portrait-label";
+      lbl.textContent = "À son tour";
+      p.appendChild(lbl);
+      card.appendChild(p);
+    }
+
+    const name = document.createElement("div");
+    name.className = "co-card-name";
+    name.textContent = c.name;
+    card.appendChild(name);
+
+    if (game.user.isGM) {
+      const stats = this.actorStats(c.actor);
+      if (stats.length) {
+        const meta = document.createElement("div");
+        meta.className = "co-card-stats";
+        for (const s of stats) meta.appendChild(this.statBadge(s));
+        card.appendChild(meta);
+      }
+    }
+
+    card.addEventListener("click", () => this.focusToken(c));
+    card.addEventListener("dblclick", () => this.openSheet(c));
+    return card;
+  }
+
+  statBadge(s) {
+    const badge = document.createElement("span");
+    badge.className = `co-stat co-stat-${s.key}`;
+    badge.innerHTML = `<i class="${s.icon}"></i>`;
+    badge.appendChild(document.createTextNode(` ${s.value}`));
+    return badge;
+  }
+
+  // ── Vignette commune (rail + liste) : anneau PV + image ou initiales ───────
+  thumbEl(c, opts = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = "co-thumb";
+
+    const ratio = this.hpRatioOf(c.actor);
+    if (ratio !== null) {
+      const ring = document.createElement("div");
+      ring.className = "co-ring";
+      const deg = Math.round(ratio * 360);
+      ring.style.background = `conic-gradient(${this.hpColor(c.actor)} ${deg}deg, rgba(255,255,255,.12) ${deg}deg)`;
+      wrap.appendChild(ring);
+    }
+    if (opts.ember) { const e = document.createElement("div"); e.className = "co-ember"; wrap.appendChild(e); }
+    if (opts.target) { const t = document.createElement("div"); t.className = "co-tgtring"; wrap.appendChild(t); }
+
+    const face = document.createElement("div");
+    face.className = "co-face";
+    if (game.settings.get(MODULE_ID, "showImages")) {
+      const img = document.createElement("img");
+      img.src = this.imgFor(c);
+      img.alt = c.name;
+      face.appendChild(img);
+    } else {
+      face.textContent = this.combatantDead(c) ? "☠" : this.initialsOf(c.name);
+    }
+    wrap.appendChild(face);
+    return wrap;
+  }
+
+  hpRatioOf(actor) {
+    const hp = actor?.system?.attributes?.hp;
+    if (!hp || !Number.isFinite(hp.max) || hp.max <= 0) return null;
+    const v = Number.isFinite(hp.value) ? hp.value : hp.max;
+    return Math.max(0, Math.min(1, v / hp.max));
+  }
+
+  hpColor(actor) {
+    if (this.actorDead(actor)) return "#5b6270";
+    const r = this.hpRatioOf(actor);
+    if (r === null) return "#5b9bd8";
+    return r > 0.5 ? "#4cc96a" : r > 0.25 ? "#e8b04b" : "#e05a5a";
+  }
+
+  actorDead(actor) {
+    return actor?.effects?.some(e => e.statuses?.has("dead") || e.flags?.core?.statusId === "dead") ?? false;
+  }
+
+  combatantDead(c) {
+    const tok = c.token?.object;
+    if (tok && tok.document?.statuses?.has("dead")) return true;
+    return this.actorDead(c.actor);
+  }
+
+  initialsOf(name) {
+    const n = String(name || "?").trim();
+    const p = n.split(/\s+/);
+    return (p.length > 1 ? p[0][0] + p[1][0] : n.slice(0, 2)).toUpperCase();
   }
 
   /** Victimes qui recevront les PV : cibles (T) en priorité, sinon sélection. */
@@ -413,11 +669,18 @@ class CombatOverlay {
     card.classList.toggle("co-pc", !isNPC);
     card.classList.toggle("co-npc", isNPC);
 
-    const img = document.createElement("img");
-    img.className = "co-target-img";
-    img.src = this.imgForToken(token);
-    img.alt = token.name;
-    card.appendChild(img);
+    if (game.settings.get(MODULE_ID, "showImages")) {
+      const img = document.createElement("img");
+      img.className = "co-target-img";
+      img.src = this.imgForToken(token);
+      img.alt = token.name;
+      card.appendChild(img);
+    } else {
+      const face = document.createElement("div");
+      face.className = "co-target-img co-target-face";
+      face.textContent = this.initialsOf(token.name);
+      card.appendChild(face);
+    }
 
     const name = document.createElement("div");
     name.className = "co-target-name";
@@ -429,7 +692,7 @@ class CombatOverlay {
       const stats = this.actorStats(token.actor);
       if (stats.length) {
         const meta = document.createElement("div");
-        meta.className = "co-target-stats co-spot-stats";
+        meta.className = "co-target-stats co-card-stats";
         for (const s of stats) {
           const badge = document.createElement("span");
           badge.className = `co-stat co-stat-${s.key}`;
@@ -598,51 +861,6 @@ class CombatOverlay {
     }
   }
 
-  renderRow(c, isCurrent) {
-    const row = document.createElement("div");
-    row.className = "co-row";
-    row.classList.toggle("co-pc", !c.isNPC);
-    row.classList.toggle("co-npc", c.isNPC);
-    row.classList.toggle("co-current", isCurrent);
-    row.classList.toggle("co-hidden", !!c.hidden);
-    row.dataset.combatantId = c.id;
-
-    // Marqueur du combattant courant.
-    const marker = document.createElement("div");
-    marker.className = "co-marker";
-    marker.innerHTML = isCurrent ? '<i class="fas fa-caret-right"></i>' : "";
-    row.appendChild(marker);
-
-    // Portrait / token.
-    const img = document.createElement("img");
-    img.className = "co-img";
-    img.src = this.imgFor(c);
-    img.alt = c.name;
-    row.appendChild(img);
-
-    // Nom.
-    const name = document.createElement("div");
-    name.className = "co-name";
-    name.textContent = c.name;
-    row.appendChild(name);
-
-    // Initiative : champ éditable si l'utilisateur possède le combattant, sinon texte.
-    row.appendChild(this.renderInit(c));
-
-    // Clic sur la ligne (hors champ) → sélectionne/centre le token si possédé.
-    row.addEventListener("click", (ev) => {
-      if (ev.target.closest("input")) return;
-      this.focusToken(c);
-    });
-    // Double-clic → ouvre la feuille de personnage.
-    row.addEventListener("dblclick", (ev) => {
-      if (ev.target.closest("input")) return;
-      this.openSheet(c);
-    });
-
-    return row;
-  }
-
   renderInit(c) {
     const hasInit = c.initiative !== null && c.initiative !== undefined;
     if (c.isOwner) {
@@ -663,48 +881,6 @@ class CombatOverlay {
     span.className = "co-init";
     span.textContent = hasInit ? c.initiative : "–";
     return span;
-  }
-
-  /** Grande vignette du combattant en vedette (courant) affichée à droite. */
-  renderSpotlight(c) {
-    const spot = document.createElement("div");
-    spot.className = "co-spotlight";
-    spot.dataset.combatantId = c.id;
-    spot.classList.toggle("co-pc", !c.isNPC);
-    spot.classList.toggle("co-npc", c.isNPC);
-
-    const img = document.createElement("img");
-    img.className = "co-spot-img";
-    img.src = this.imgFor(c);
-    img.alt = c.name;
-    spot.appendChild(img);
-
-    const name = document.createElement("div");
-    name.className = "co-spot-name";
-    name.textContent = c.name;
-    spot.appendChild(name);
-
-    // Infos MJ (CA / PV) — visibles du MJ uniquement, si l'acteur les expose.
-    if (game.user.isGM) {
-      const stats = this.actorStats(c.actor);
-      if (stats.length) {
-        const meta = document.createElement("div");
-        meta.className = "co-spot-stats";
-        for (const s of stats) {
-          const badge = document.createElement("span");
-          badge.className = `co-stat co-stat-${s.key}`;
-          badge.innerHTML = `<i class="${s.icon}"></i>`;
-          badge.appendChild(document.createTextNode(` ${s.value}`));
-          meta.appendChild(badge);
-        }
-        spot.appendChild(meta);
-      }
-    }
-
-    // Clic → sélection/centrage du token (si possédé) ; double-clic → feuille.
-    spot.addEventListener("click", () => this.focusToken(c));
-    spot.addEventListener("dblclick", () => this.openSheet(c));
-    return spot;
   }
 
   /** Stats MJ à afficher pour un acteur (dnd5e), tolérant aux données manquantes. */
