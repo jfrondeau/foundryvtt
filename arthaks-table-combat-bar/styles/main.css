@@ -108,6 +108,16 @@
 #combat-overlay .co-stat-hp i { color: #ff7e7e; }
 #combat-overlay .co-stat-thp { color: #cdfbe0; }
 #combat-overlay .co-stat-thp i { color: #64d6a0; }
+#combat-overlay .co-stat-editable { cursor: pointer; }
+#combat-overlay .co-stat-editable:hover {
+  background: rgba(255, 107, 107, 0.25); box-shadow: 0 0 0 1px rgba(255, 126, 126, 0.5) inset;
+}
+/* Input inline logé dans le badge PV (édition mono-cible). */
+#combat-overlay input.co-hp-inline {
+  width: 48px; height: 16px; margin: 0; padding: 0 3px;
+  border-radius: 8px; font-size: 12px; text-align: center;
+}
+#combat-overlay input.co-hp-inline::placeholder { font-size: 10px; }
 
 /* ── Panneau cible : image(s) + CA/PV + champ PV (à droite du spotlight) ───────── */
 #combat-overlay .co-targets {

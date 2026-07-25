@@ -157,11 +157,16 @@ class CombatOverlay {
     // Ne pas capter la touche quand on tape déjà dans un champ.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return false;
-    const input = inst.root.querySelector(".co-hp-edit");
-    if (!input) { notify.warn("Aucune cible : cible un token (T) ou sélectionne-le."); return false; }
-    input.focus();
-    input.select?.();
-    return true;
+    // AoE (≥2 cibles) : champ partagé. Sinon : édition inline du badge PV.
+    const shared = inst.root.querySelector(".co-hp-edit");
+    if (shared) { shared.focus(); shared.select?.(); return true; }
+    const badge = inst.root.querySelector(".co-target .co-stat-hp.co-stat-editable");
+    if (badge) {
+      const token = canvas.tokens?.get(badge.dataset.tokenId);
+      if (token) { inst.beginHpEdit(token, badge); return true; }
+    }
+    notify.warn("Aucune cible : cible un token (T) ou sélectionne-le.");
+    return false;
   }
 
   constructor() {
@@ -374,25 +379,29 @@ class CombatOverlay {
     for (const token of victims) list.appendChild(this.renderTargetCard(token));
     panel.appendChild(list);
 
-    const input = document.createElement("input");
-    input.className = "co-hp-edit";
-    input.type = "text";
-    input.inputMode = "numeric";
-    input.placeholder = "Δ PV  ( / )";
-    input.dataset.tooltip = "8 = dégâts · +8 = soin · Entrée pour appliquer";
-    input.addEventListener("click", (ev) => ev.stopPropagation());
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        const value = input.value;
-        input.value = "";
-        this.applyHpToVictims(value).finally(() => input.blur());
-      } else if (ev.key === "Escape") {
-        input.value = "";
-        input.blur();
-      }
-    });
-    panel.appendChild(input);
+    // Champ delta partagé : uniquement en AoE (≥2 cibles). En solo, on édite
+    // directement le badge PV de la cible (clic ou raccourci « / »).
+    if (victims.length >= 2) {
+      const input = document.createElement("input");
+      input.className = "co-hp-edit";
+      input.type = "text";
+      input.inputMode = "numeric";
+      input.placeholder = "Δ PV  ( / )";
+      input.dataset.tooltip = "8 = dégâts · +8 = soin · Entrée = toutes les cibles";
+      input.addEventListener("click", (ev) => ev.stopPropagation());
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          const value = input.value;
+          input.value = "";
+          this.applyHpToVictims(value).finally(() => input.blur());
+        } else if (ev.key === "Escape") {
+          input.value = "";
+          input.blur();
+        }
+      });
+      panel.appendChild(input);
+    }
     return panel;
   }
 
@@ -426,6 +435,13 @@ class CombatOverlay {
           badge.className = `co-stat co-stat-${s.key}`;
           badge.innerHTML = `<i class="${s.icon}"></i>`;
           badge.appendChild(document.createTextNode(` ${s.value}`));
+          // Badge PV cliquable → édition inline du delta (si on possède l'acteur).
+          if (s.key === "hp" && token.actor?.isOwner) {
+            badge.classList.add("co-stat-editable");
+            badge.dataset.tokenId = token.id;
+            badge.dataset.tooltip = "Clic : modifier les PV (8 = dégâts, +8 = soin)";
+            badge.addEventListener("click", (ev) => { ev.stopPropagation(); this.beginHpEdit(token, badge); });
+          }
           meta.appendChild(badge);
         }
         card.appendChild(meta);
@@ -440,48 +456,108 @@ class CombatOverlay {
   }
 
   /**
-   * Applique un delta PV aux victimes via le moteur natif dnd5e (applyDamage :
-   * gère PV temporaires). Convention de saisie identique à TokenHp.js :
-   * « 8 » = dégâts, « +8 » = soin, « -8 » = dégâts.
+   * Interprète une saisie PV (convention TokenHp.js : « 8 » = dégâts, « +8 » =
+   * soin, « -8 » = dégâts) et renvoie le delta signé (négatif = dégâts), ou
+   * null si vide / invalide / nul.
    */
-  async applyHpToVictims(rawValue) {
+  parseHpDelta(rawValue) {
     const raw = String(rawValue).trim();
-    if (!raw) return;
+    if (!raw) return null;
     const hasSign = raw.startsWith("+") || raw.startsWith("-");
     const parsed = parseInt(raw, 10);
-    if (Number.isNaN(parsed)) { notify.warn("Valeur PV invalide (ex : 8, +8, -8)."); return; }
-    // Delta signé (négatif = dégâts) puis conversion applyDamage (positif = dégâts).
+    if (Number.isNaN(parsed)) { notify.warn("Valeur PV invalide (ex : 8, +8, -8)."); return null; }
     const delta = hasSign ? parsed : -Math.abs(parsed);
-    if (delta === 0) return;
-    const amount = -delta;
+    return delta === 0 ? null : delta;
+  }
 
+  /**
+   * Applique un delta PV à un seul token via le moteur natif dnd5e (applyDamage
+   * gère les PV temporaires) et met à jour le statut Dead. Renvoie
+   * { before, after, died } ou null si l'application a échoué / été refusée.
+   */
+  async applyDeltaToToken(token, delta) {
+    const actor = token.actor;
+    if (!actor) { notify.warn(`"${token.name}" sans acteur, ignoré.`); return null; }
+    if (typeof actor.applyDamage !== "function") { notify.warn(`applyDamage indisponible sur "${token.name}".`); return null; }
+    if (!actor.isOwner) { notify.warn(`Pas de permission sur "${token.name}".`); return null; }
+    const before = actor.system?.attributes?.hp?.value;
+    try {
+      await actor.applyDamage(-delta); // applyDamage : positif = dégâts.
+      const after = actor.system?.attributes?.hp?.value;
+      // Statut Dead auto : appliqué si le solde < 1, retiré si les PV remontent.
+      const dying = Number(after) < 1;
+      const wasDead = this.hasDeadStatus(token);
+      let died = false;
+      if (dying && !wasDead) { await this.setDeadStatus(token, true); died = true; }
+      else if (!dying && wasDead) await this.setDeadStatus(token, false);
+      return { before, after, died };
+    } catch (err) {
+      notify.warn(`Échec PV sur "${token.name}".`);
+      console.error(err);
+      return null;
+    }
+  }
+
+  /** Applique une saisie PV à un seul token (édition inline du badge PV). */
+  async applyHpToOne(token, rawValue) {
+    const delta = this.parseHpDelta(rawValue);
+    if (delta === null) return;
+    const res = await this.applyDeltaToToken(token, delta);
+    if (!res) return;
+    notify.info(`${delta < 0 ? "💀 Dégâts" : "💚 Soin"} [${delta > 0 ? "+" : ""}${delta}] : ${token.name} ${res.before}→${res.after}`);
+    if (res.died) notify.warn(`☠️ Mort : ${token.name}`);
+  }
+
+  /** Applique une saisie PV partagée à toutes les victimes (AoE, champ ≥2 cibles). */
+  async applyHpToVictims(rawValue) {
+    const delta = this.parseHpDelta(rawValue);
+    if (delta === null) return;
     const victims = this.resolveVictims();
     if (!victims.length) { notify.warn("Aucune cible."); return; }
 
     const log = [];
     const dead = [];
     for (const token of victims) {
-      const actor = token.actor;
-      if (!actor) { notify.warn(`"${token.name}" sans acteur, ignoré.`); continue; }
-      if (typeof actor.applyDamage !== "function") { notify.warn(`applyDamage indisponible sur "${token.name}".`); continue; }
-      if (!actor.isOwner) { notify.warn(`Pas de permission sur "${token.name}".`); continue; }
-      const before = actor.system?.attributes?.hp?.value;
-      try {
-        await actor.applyDamage(amount);
-        const after = actor.system?.attributes?.hp?.value;
-        log.push(`${token.name}: ${before}→${after}`);
-        // Statut Dead auto : appliqué si le solde < 1, retiré si les PV remontent.
-        const dying = Number(after) < 1;
-        const wasDead = this.hasDeadStatus(token);
-        if (dying && !wasDead) { await this.setDeadStatus(token, true); dead.push(token.name); }
-        else if (!dying && wasDead) await this.setDeadStatus(token, false);
-      } catch (err) {
-        notify.warn(`Échec PV sur "${token.name}".`);
-        console.error(err);
-      }
+      const res = await this.applyDeltaToToken(token, delta);
+      if (!res) continue;
+      log.push(`${token.name}: ${res.before}→${res.after}`);
+      if (res.died) dead.push(token.name);
     }
     if (log.length) notify.info(`${delta < 0 ? "💀 Dégâts" : "💚 Soin"} [${delta > 0 ? "+" : ""}${delta}] : ${log.join(" | ")}`);
     if (dead.length) notify.warn(`☠️ Mort : ${dead.join(", ")}`);
+  }
+
+  /**
+   * Bascule un badge PV en champ de saisie inline (delta) pour ce token.
+   * Entrée applique, Échap/blur annule. Réutilise la classe .co-hp-edit pour
+   * bénéficier de la garde anti-reconstruction pendant l'édition.
+   */
+  beginHpEdit(token, badge) {
+    if (!badge || badge.querySelector("input")) return;
+    const original = badge.innerHTML;
+    const input = document.createElement("input");
+    input.className = "co-hp-edit co-hp-inline";
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.placeholder = "±PV";
+    input.dataset.tooltip = "8 = dégâts · +8 = soin · Entrée pour appliquer";
+    input.addEventListener("click", (ev) => ev.stopPropagation());
+    input.addEventListener("blur", () => { badge.innerHTML = original; }, { once: true });
+    input.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const value = input.value;
+        input.blur(); // restaure le badge ; la MàJ acteur déclenchera un re-render.
+        this.applyHpToOne(token, value);
+      } else if (ev.key === "Escape") {
+        input.blur();
+      }
+    });
+    badge.innerHTML = "";
+    badge.appendChild(input);
+    input.focus();
+    input.select?.();
   }
 
   /** Le token (ou son acteur) porte-t-il le statut « dead » ? */

@@ -1,0 +1,9 @@
+# Environnement VS Code
+.vscode/
+*.code-workspace
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+examples/
