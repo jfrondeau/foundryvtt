@@ -22,8 +22,8 @@
  *  - Bouton ⟨ / ⟩       → minimise / ré-étend la barre.
  *  - Poignée (⋮⋮)       → glisser pour déplacer la barre (position mémorisée).
  *
- * Mode immersif : un réglage MONDE (modifiable par le MJ uniquement) masque le
- * reste de l'interface pour les joueurs, ne laissant que cette barre + le canvas.
+ * (Le masquage de l'interface des joueurs — « Hide player HUD » — vit désormais
+ * dans son propre module « arthaks-table-hide-hud ».)
  */
 
 const MODULE_ID = "arthaks-table-template-bar";
@@ -33,6 +33,18 @@ const notify = {
   info: (m) => console.log(`[Spell Template Bar] ${m}`),
   warn: (m) => { console.warn(`[Spell Template Bar] ${m}`); ui.notifications?.warn(m); },
 };
+
+/** Ouvre les réglages en se plaçant directement sur la catégorie de CE module. */
+async function openModuleSettings() {
+  const app = game.settings?.sheet;
+  if (!app) return;
+  await app.render({ force: true });
+  await new Promise((r) => requestAnimationFrame(r));
+  try { app.changeTab(MODULE_ID, "categories"); return; }
+  catch (e) { console.warn("[Spell Template Bar] settings:", e); }
+  // Repli DOM : clique l'entrée de catégorie du module.
+  app.element?.querySelector?.(`[data-tab="${MODULE_ID}"], [data-category="${MODULE_ID}"]`)?.click?.();
+}
 
 // ── Formes disponibles (noms des outils du contrôle « regions » de dnd5e) ─────
 const SHAPES = [
@@ -57,28 +69,6 @@ Hooks.once("init", () => {
     default: 40,
     onChange: () => SpellTemplateBar.instance?.applyButtonSize(),
   });
-
-  // Toggle maître : masque l'interface des JOUEURS (le MJ garde la sienne).
-  game.settings.register(MODULE_ID, "hidePlayerHud", {
-    name: "Hide player HUD — masquer l'interface des joueurs",
-    hint: "Réservé au MJ. Pour les JOUEURS uniquement : ne conserve que le canvas et cette barre. Le MJ garde son interface complète.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-    onChange: () => SpellTemplateBar.applyHidePlayerHud(),
-  });
-
-  // Seule exception configurable : conserver le chat (chat-scroll), sans sa saisie.
-  game.settings.register(MODULE_ID, "showChat", {
-    name: "Chat",
-    hint: "Conserver le journal de chat (chat-scroll) visible pour les joueurs quand l'interface est masquée. Le champ de saisie (chat-form) reste masqué.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-    onChange: () => SpellTemplateBar.applyHidePlayerHud(),
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -92,7 +82,6 @@ Hooks.once("ready", () => {
   }
   SpellTemplateBar.instance = new SpellTemplateBar();
   SpellTemplateBar.instance.render();
-  SpellTemplateBar.applyHidePlayerHud();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -100,25 +89,6 @@ Hooks.once("ready", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 class SpellTemplateBar {
   static instance = null;
-
-  /**
-   * Masque l'interface des joueurs selon les réglages monde (joueurs seulement).
-   * Pose deux classes repère sur <body>, exploitées par la feuille de style :
-   *  - stb-hide-hud  : masque toute l'interface (canvas + barre conservés) ;
-   *  - stb-show-chat : exception « Chat » — garde .chat-scroll dans la sidebar
-   *                    tout en masquant .chat-form (classes, pas des id en v14).
-   */
-  static applyHidePlayerHud() {
-    const active   = !!game.settings.get(MODULE_ID, "hidePlayerHud") && !game.user.isGM;
-    const showChat = !!game.settings.get(MODULE_ID, "showChat");
-    document.body.classList.toggle("stb-hide-hud", active);
-    document.body.classList.toggle("stb-show-chat", active && showChat);
-
-    // Best-effort : garder l'onglet Chat actif pour que #chat-scroll reste affiché.
-    if (active && showChat) {
-      try { ui.sidebar?.changeTab?.("chat", "primary"); } catch (_) { /* API variable selon version */ }
-    }
-  }
 
   constructor() {
     this.bar = null;
@@ -182,6 +152,15 @@ class SpellTemplateBar {
     trash.appendChild(trashIcon);
     trash.addEventListener("click", (ev) => { ev.preventDefault(); this.clearMine(); });
     bar.appendChild(trash);
+
+    // Accès rapide aux réglages du module (utile joueur, HUD masqué : le menu de
+    // configuration n'est plus accessible autrement).
+    const gear = document.createElement("div");
+    gear.className = "tb-toggle tb-gear";
+    gear.dataset.tooltip = "Réglages du module";
+    gear.innerHTML = '<i class="fas fa-gear"></i>';
+    gear.addEventListener("click", () => openModuleSettings());
+    bar.appendChild(gear);
 
     // Toggle minimiser / ré-étendre (toujours visible).
     const toggle = document.createElement("div");
@@ -351,11 +330,16 @@ class SpellTemplateBar {
     this.bar.querySelector(`.tb-btn[data-shape="${shape}"]`)?.classList.add("tb-active");
   }
 
+  /** Retire la surbrillance des boutons de forme (sans toucher à la couche). */
+  clearActiveButtons() {
+    this.bar?.querySelectorAll(".tb-btn.tb-active").forEach(b => b.classList.remove("tb-active"));
+  }
+
   restoreLayer() {
     const target = this.returnLayer ?? canvas.tokens;
     this.returnLayer = null;
     target?.activate?.();
-    this.bar.querySelectorAll(".tb-btn.tb-active").forEach(b => b.classList.remove("tb-active"));
+    this.clearActiveButtons();
   }
 
   // ── Suppression des gabarits ───────────────────────────────────────────────
@@ -389,12 +373,20 @@ class SpellTemplateBar {
 
   // ── Hooks Region ───────────────────────────────────────────────────────────
   registerHooks() {
-    // Retour à la couche précédente après le dessin (différé pour ne pas casser
-    // la propagation du placeable pendant _onCreate).
+    // Après le dessin d'un gabarit : on NE restaure la couche QUE si c'est la
+    // barre qui l'a changée (returnLayer posé via un bouton) ET pour un JOUEUR
+    // (mode immersif). Le MJ n'est jamais sorti de sa couche, et un dessin manuel
+    // (returnLayer absent) ne provoque aucune bascule. Différé pour ne pas casser
+    // la propagation du placeable pendant _onCreate.
     this.hookIds.createRegion = Hooks.on("createRegion", (doc, options, userId) => {
       if (userId !== game.user.id) return;
       this.emanationTokenId = null;
-      setTimeout(() => this.restoreLayer(), 50);
+      if (this.returnLayer && !game.user.isGM) {
+        setTimeout(() => this.restoreLayer(), 50);
+      } else {
+        this.returnLayer = null;
+        this.clearActiveButtons();
+      }
     });
 
     // Le bouton Émanation suit la sélection de tokens (actif si exactement un).

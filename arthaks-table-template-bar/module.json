@@ -1,8 +1,8 @@
 {
   "id": "arthaks-table-template-bar",
   "title": "Arthak's Table Template bar",
-  "description": "Barre flottante de gabarits de sort (via le mode gabarit Regions de dnd5e), affichée automatiquement pour tous les joueurs, avec un mode immersif masquant le reste de l'interface.",
-  "version": "1.0.0",
+  "description": "Barre flottante de gabarits de sort (via le mode gabarit Regions de dnd5e), affichée automatiquement pour tous les joueurs. Le masquage de l'interface des joueurs est désormais fourni par le module « Arthak's Table Hide HUD ».",
+  "version": "1.1.0",
   "authors": [
     { "name": "jfrondeau" }
   ],
