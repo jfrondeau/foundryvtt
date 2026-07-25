@@ -58,12 +58,22 @@ Hooks.once("init", () => {
 
   game.settings.register(MODULE_ID, "rowSize", {
     name: "Taille des lignes (px)",
-    hint: "Hauteur des vignettes de combattant.",
+    hint: "Hauteur des vignettes des lignes de la liste (petites).",
     scope: "client",
     config: true,
     type: Number,
-    default: 40,
-    onChange: () => CombatOverlay.instance?.applyRowSize(),
+    default: 34,
+    onChange: () => CombatOverlay.instance?.applySizes(),
+  });
+
+  game.settings.register(MODULE_ID, "currentImageSize", {
+    name: "Taille de l'image du combattant courant (px)",
+    hint: "Grande image du combattant courant, affichée à droite de la liste (env. 4 lignes par défaut).",
+    scope: "client",
+    config: true,
+    type: Number,
+    default: 140,
+    onChange: () => CombatOverlay.instance?.applySizes(),
   });
 
   game.settings.register(MODULE_ID, "autoControlToken", {
@@ -160,6 +170,14 @@ class CombatOverlay {
     this.hookIds.createCombatant   = Hooks.on("createCombatant", rerender);
     this.hookIds.updateCombatant   = Hooks.on("updateCombatant", rerender);
     this.hookIds.deleteCombatant   = Hooks.on("deleteCombatant", rerender);
+    // Filet de sécurité : se re-synchronise chaque fois que le tracker natif se
+    // rafraîchit — notamment quand un combattant caché redevient visible (la donnée
+    // n'était pas synchronisée côté joueur, aucun hook de combattant ne s'y déclenche).
+    this.hookIds.renderCombatTracker = Hooks.on("renderCombatTracker", rerender);
+    // Bascule de visibilité côté token (hidden) → rafraîchit aussi.
+    this.hookIds.updateToken = Hooks.on("updateToken", (doc, changes) => {
+      if ("hidden" in changes) rerender();
+    });
   }
 
   destroy() {
@@ -205,7 +223,7 @@ class CombatOverlay {
     this.root = root;
     document.body.appendChild(root);
 
-    this.applyRowSize();
+    this.applySizes();
     this.applyPosition();
     if (localStorage.getItem(this.collapsedKey) === "1") root.classList.add("co-collapsed");
   }
@@ -233,7 +251,7 @@ class CombatOverlay {
 
     const round = document.createElement("div");
     round.className = "co-round";
-    round.textContent = combat.started ? `Manche ${combat.round}` : "Préparation";
+    round.textContent = combat.started ? `Round ${combat.round}` : "Préparation";
     header.appendChild(round);
 
     if (game.user.isGM) {
@@ -267,10 +285,6 @@ class CombatOverlay {
 
     root.appendChild(header);
 
-    // Liste des combattants (masquée à l'état minimisé).
-    const list = document.createElement("div");
-    list.className = "co-list co-collapsible";
-
     // Marqueur ▶ : sur le combattant courant s'il est visible pour cet utilisateur.
     // Si le courant est caché (ex. monstre invisible côté joueur), on CONSERVE le
     // marqueur sur le dernier combattant visible qui l'avait, plutôt que de l'effacer.
@@ -286,10 +300,21 @@ class CombatOverlay {
       markerId = this._lastVisibleCurrentId;
     }
 
+    // Corps : liste compacte à gauche, grande image du courant à droite.
+    const body = document.createElement("div");
+    body.className = "co-body co-collapsible";
+
+    const list = document.createElement("div");
+    list.className = "co-list";
     for (const c of visible) {
       list.appendChild(this.renderRow(c, c.id === markerId));
     }
-    root.appendChild(list);
+    body.appendChild(list);
+
+    const featured = markerId ? visible.find(c => c.id === markerId) : null;
+    if (featured) body.appendChild(this.renderSpotlight(featured));
+
+    root.appendChild(body);
   }
 
   renderRow(c, isCurrent) {
@@ -328,6 +353,11 @@ class CombatOverlay {
       if (ev.target.closest("input")) return;
       this.focusToken(c);
     });
+    // Double-clic → ouvre la feuille de personnage.
+    row.addEventListener("dblclick", (ev) => {
+      if (ev.target.closest("input")) return;
+      this.openSheet(c);
+    });
 
     return row;
   }
@@ -352,6 +382,66 @@ class CombatOverlay {
     span.className = "co-init";
     span.textContent = hasInit ? c.initiative : "–";
     return span;
+  }
+
+  /** Grande vignette du combattant en vedette (courant) affichée à droite. */
+  renderSpotlight(c) {
+    const spot = document.createElement("div");
+    spot.className = "co-spotlight";
+    spot.dataset.combatantId = c.id;
+    spot.classList.toggle("co-pc", !c.isNPC);
+    spot.classList.toggle("co-npc", c.isNPC);
+
+    const img = document.createElement("img");
+    img.className = "co-spot-img";
+    img.src = this.imgFor(c);
+    img.alt = c.name;
+    spot.appendChild(img);
+
+    const name = document.createElement("div");
+    name.className = "co-spot-name";
+    name.textContent = c.name;
+    spot.appendChild(name);
+
+    // Infos MJ (CA / PV) — visibles du MJ uniquement, si l'acteur les expose.
+    if (game.user.isGM) {
+      const stats = this.gmStats(c);
+      if (stats.length) {
+        const meta = document.createElement("div");
+        meta.className = "co-spot-stats";
+        for (const s of stats) {
+          const badge = document.createElement("span");
+          badge.className = `co-stat co-stat-${s.key}`;
+          badge.innerHTML = `<i class="${s.icon}"></i>`;
+          badge.appendChild(document.createTextNode(` ${s.value}`));
+          meta.appendChild(badge);
+        }
+        spot.appendChild(meta);
+      }
+    }
+
+    // Clic → sélection/centrage du token (si possédé) ; double-clic → feuille.
+    spot.addEventListener("click", () => this.focusToken(c));
+    spot.addEventListener("dblclick", () => this.openSheet(c));
+    return spot;
+  }
+
+  /** Stats MJ à afficher pour un combattant (dnd5e), tolérant aux données manquantes. */
+  gmStats(c) {
+    const sys = c.actor?.system;
+    if (!sys) return [];
+    const out = [];
+    const ac = sys.attributes?.ac?.value;
+    if (Number.isFinite(ac)) out.push({ key: "ac", icon: "fas fa-shield-halved", value: ac });
+    const hp = sys.attributes?.hp;
+    if (hp && (Number.isFinite(hp.value) || Number.isFinite(hp.max))) {
+      out.push({ key: "hp", icon: "fas fa-heart", value: `${hp.value ?? "?"}/${hp.max ?? "?"}` });
+    }
+    // PV temporaires (dnd5e : hp.temp) — badge séparé à droite des PV, si présents.
+    if (Number.isFinite(hp?.temp) && hp.temp > 0) {
+      out.push({ key: "thp", icon: "fas fa-shield-heart", value: `+${hp.temp}` });
+    }
+    return out;
   }
 
   makeBtn(iconClass, tooltip, onClick) {
@@ -419,6 +509,13 @@ class CombatOverlay {
     }
   }
 
+  /** Double-clic : ouvre la feuille de l'acteur (si l'utilisateur a au moins un accès limité). */
+  openSheet(combatant) {
+    const actor = combatant?.actor;
+    if (!actor?.testUserPermission(game.user, "LIMITED")) return;
+    actor.sheet?.render(true);
+  }
+
   /** Clic sur une ligne : sélectionne et centre sur le token si l'utilisateur le possède. */
   focusToken(combatant) {
     const token = combatant?.token?.object;
@@ -430,9 +527,11 @@ class CombatOverlay {
   }
 
   // ── Taille / minimiser ───────────────────────────────────────────────────
-  applyRowSize() {
-    const size = Number(game.settings.get(MODULE_ID, "rowSize")) || 40;
-    this.root?.style.setProperty("--co-row", `${size}px`);
+  applySizes() {
+    const row = Number(game.settings.get(MODULE_ID, "rowSize")) || 34;
+    const spot = Number(game.settings.get(MODULE_ID, "currentImageSize")) || 140;
+    this.root?.style.setProperty("--co-row", `${row}px`);
+    this.root?.style.setProperty("--co-spot", `${spot}px`);
   }
 
   toggleCollapsed() {

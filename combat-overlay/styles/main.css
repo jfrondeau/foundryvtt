@@ -1,12 +1,13 @@
 /* ── Overlay de combat ───────────────────────────────────────────────────────── */
 #combat-overlay {
-  --co-row: 40px;               /* hauteur des vignettes (réglage rowSize) */
+  --co-row: 34px;               /* hauteur des vignettes de liste (réglage rowSize) */
+  --co-spot: 140px;             /* taille de l'image du courant (réglage currentImageSize) */
   --co-pc: #4a90d9;             /* accent PJ */
   --co-npc: #b5484a;            /* accent monstre */
   --co-current: #ff6400;        /* accent combattant courant */
   position: fixed; z-index: 70;
   display: flex; flex-direction: column;
-  min-width: 170px; max-width: 260px;
+  width: max-content; max-width: 90vw;
   background: rgba(0, 0, 0, 0.68);
   border: 1px solid #7a7a7a; border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
@@ -59,12 +60,54 @@
 }
 #combat-overlay .co-toggle:hover { color: #fff; border-color: var(--co-current); }
 
-/* ── Liste ────────────────────────────────────────────────────────────────── */
+/* ── Corps : liste à gauche, grande image du courant à droite ─────────────────── */
+#combat-overlay .co-body {
+  display: flex; align-items: stretch; gap: 4px; padding: 3px;
+}
+
 #combat-overlay .co-list {
   display: flex; flex-direction: column;
-  padding: 3px; gap: 2px;
+  gap: 2px;
+  min-width: 150px; flex: 1 1 auto;
   max-height: 60vh; overflow-y: auto;
 }
+
+/* ── Spotlight : grande image du combattant courant (≈ 4 lignes de haut) ───────── */
+#combat-overlay .co-spotlight {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: var(--co-spot);
+  padding: 4px; border-radius: 5px;
+  border: 2px solid var(--co-current);
+  background: rgba(255, 100, 0, 0.14);
+}
+#combat-overlay .co-spotlight.co-pc  { border-color: var(--co-current); }
+#combat-overlay .co-spot-img {
+  width: 100%; height: var(--co-spot);
+  object-fit: cover; border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.6); background: #111;
+}
+#combat-overlay .co-spot-name {
+  width: 100%; text-align: center; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#combat-overlay .co-spot-stats {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+  width: 100%;
+}
+#combat-overlay .co-stat {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  background: rgba(0, 0, 0, 0.45); border: 1px solid #555;
+  font-variant-numeric: tabular-nums;
+}
+#combat-overlay .co-stat i { font-size: 10px; }
+#combat-overlay .co-stat-ac { color: #cfe3ff; }
+#combat-overlay .co-stat-ac i { color: #8fb8ff; }
+#combat-overlay .co-stat-hp { color: #ffd0d0; }
+#combat-overlay .co-stat-hp i { color: #ff7e7e; }
+#combat-overlay .co-stat-thp { color: #cdfbe0; }
+#combat-overlay .co-stat-thp i { color: #64d6a0; }
 
 #combat-overlay .co-row {
   display: flex; align-items: center; gap: 5px;
