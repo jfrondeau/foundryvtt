@@ -202,7 +202,8 @@ export class CombatOverlay extends FloatingBar {
 
     // Réglages d'image lus une seule fois par rendu (utilisés par combattant ensuite).
     this._showImages = game.settings.get(MODULE_ID, "showImages");
-    this._imageMode  = game.settings.get(MODULE_ID, "imageMode");
+    this._imageMode  = game.settings.get(MODULE_ID, "imageMode");           // vignettes de la liste / rail
+    this._featuredImageMode = game.settings.get(MODULE_ID, "featuredImageMode"); // courant + cibles
     // Disposition du courant : « en place » dans la liste (défaut) ou colonne à droite.
     this._inlineCurrent = game.settings.get(MODULE_ID, "combatCurrentInline");
 
@@ -483,7 +484,7 @@ export class CombatOverlay extends FloatingBar {
       const p = document.createElement("div");
       p.className = "co-portrait";
       const img = document.createElement("img");
-      img.src = this.imgFor(c);
+      img.src = this.imgFor(c, this._featuredImageMode);
       img.alt = c.name;
       p.appendChild(img);
       card.appendChild(p);
@@ -537,7 +538,7 @@ export class CombatOverlay extends FloatingBar {
     face.className = "co-face";
     if (this._showImages) {
       const img = document.createElement("img");
-      img.src = this.imgFor(c);
+      img.src = this.imgFor(c, this._imageMode);
       img.alt = c.name;
       face.appendChild(img);
     } else {
@@ -637,7 +638,7 @@ export class CombatOverlay extends FloatingBar {
     if (this._showImages) {
       const img = document.createElement("img");
       img.className = "co-target-img";
-      img.src = this.imgForToken(token);
+      img.src = this.imgForToken(token, this._featuredImageMode);
       img.alt = token.name;
       card.appendChild(img);
     } else {
@@ -872,11 +873,12 @@ export class CombatOverlay extends FloatingBar {
 
   // ── Données ────────────────────────────────────────────────────────────
   /**
-   * Choisit la source d'image (token ou acteur) selon le réglage imageMode (lu
-   * une fois par rendu dans this._imageMode), avec repli si vidéo/manquante.
+   * Choisit la source d'image (token ou acteur) selon le `mode` fourni
+   * (« token » | « actor »), avec repli si vidéo/manquante. Le mode diffère selon
+   * le contexte : vignettes de la liste (this._imageMode) vs courant/cibles
+   * (this._featuredImageMode).
    */
-  pickImg(tokenSrc, actorSrc) {
-    const mode = this._imageMode;
+  pickImg(tokenSrc, actorSrc, mode) {
     let src = mode === "token" ? (tokenSrc || actorSrc) : (actorSrc || tokenSrc);
     if (!src || VIDEO_RE.test(src)) {
       const alt = mode === "token" ? actorSrc : tokenSrc;
@@ -885,11 +887,11 @@ export class CombatOverlay extends FloatingBar {
     return src;
   }
 
-  /** Image d'un combattant (rail / carte du courant). */
-  imgFor(c) { return this.pickImg(c.token?.texture?.src || c.img, c.actor?.img); }
+  /** Image d'un combattant (`mode` : celui de la liste ou du courant selon l'appelant). */
+  imgFor(c, mode) { return this.pickImg(c.token?.texture?.src || c.img, c.actor?.img, mode); }
 
   /** Image d'un Token placé sur la scène (cible / sélection). */
-  imgForToken(token) { return this.pickImg(token.document?.texture?.src, token.actor?.img); }
+  imgForToken(token, mode) { return this.pickImg(token.document?.texture?.src, token.actor?.img, mode); }
 
   /** Termine et clôture le combat après confirmation (MJ). */
   async endCombat(combat) {

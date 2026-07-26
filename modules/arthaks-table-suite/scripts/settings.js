@@ -101,8 +101,17 @@ export function registerSettings() {
     () => CombatOverlay.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "imageMode", {
-    name: "Combat · Image des combattants",
-    hint: "Portrait de la fiche d'acteur ou image du token placé sur la scène.",
+    name: "Combat · Image des combattants (liste)",
+    hint: "Vignettes de la liste / du rail : portrait de la fiche d'acteur ou image du token placé sur la scène.",
+    scope: "world", config: true, type: String,
+    choices: { actor: "Portrait de l'acteur", token: "Image du token" },
+    default: "actor",
+    onChange: syncCombat,
+  });
+
+  game.settings.register(MODULE_ID, "featuredImageMode", {
+    name: "Combat · Image du courant et des cibles",
+    hint: "Grand portrait du combattant courant et des cibles : portrait de la fiche d'acteur ou image du token. Indépendant du réglage des vignettes de la liste.",
     scope: "world", config: true, type: String,
     choices: { actor: "Portrait de l'acteur", token: "Image du token" },
     default: "actor",
