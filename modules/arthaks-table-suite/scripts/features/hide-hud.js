@@ -1,17 +1,13 @@
 /**
- * Arthak's Table Hide HUD — Module Foundry VTT v13/v14
- *
- * Masque l'interface des JOUEURS pour l'écran partagé de la table : ne conserve
- * que le canvas (et cette table de jeu), avec en option le journal de chat.
- * Réservé au MJ, qui garde son interface complète.
+ * Hide HUD — masquage de l'interface des JOUEURS pour l'écran partagé de la table :
+ * ne conserve que le canvas (et cette table de jeu), avec en option le journal de
+ * chat. Réservé au MJ, qui garde son interface complète.
  *
  * Deux classes repère sont posées sur <body>, exploitées par la feuille de style :
  *  - ahh-hide-hud  : masque toute l'interface (canvas conservé) ;
  *  - ahh-show-chat : exception « Chat » — garde .chat-scroll dans la sidebar tout
  *                    en masquant la saisie (.chat-form). NB : chat-scroll /
  *                    chat-form sont des CLASSES (pas des id) en Foundry v14.
- *
- * (Extrait de « arthaks-table-template-bar » — le mode immersif y vivait avant.)
  */
 
 import { MODULE_ID } from "../const.js";

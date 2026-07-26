@@ -7,6 +7,7 @@
  * préfixés par leur zone pour rester lisibles dans la longue liste de configuration.
  */
 import { MODULE_ID } from "./const.js";
+import { BARS } from "./features/registry.js";
 import { SpellTemplateBar } from "./features/template-bar.js";
 import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
@@ -20,27 +21,14 @@ function toggleFeature(cls, on) {
 
 /** Enregistre tous les réglages de la suite (appelé au hook « init »). */
 export function registerSettings() {
-  // ── Activation des fonctionnalités ─────────────────────────────────────────
-  game.settings.register(MODULE_ID, "enableTemplateBar", {
-    name: "Activer · Barre de gabarits",
-    hint: "Barre flottante de gabarits de sort (mode gabarit Regions de dnd5e).",
-    scope: "world", config: true, type: Boolean, default: true,
-    onChange: (v) => toggleFeature(SpellTemplateBar, v),
-  });
-
-  game.settings.register(MODULE_ID, "enableCombatBar", {
-    name: "Activer · Suivi de combat",
-    hint: "Overlay de suivi de combat compact superposé à la scène.",
-    scope: "world", config: true, type: Boolean, default: true,
-    onChange: (v) => toggleFeature(CombatOverlay, v),
-  });
-
-  game.settings.register(MODULE_ID, "enableTokenBar", {
-    name: "Activer · Barre d'action du token",
-    hint: "Barre d'actions (armes, features, sorts) du token sélectionné.",
-    scope: "world", config: true, type: Boolean, default: true,
-    onChange: (v) => toggleFeature(TokenActionBar, v),
-  });
+  // ── Activation des fonctionnalités (une entrée par barre du registre) ───────
+  for (const { cls, enable, name, hint } of BARS) {
+    game.settings.register(MODULE_ID, enable, {
+      name, hint,
+      scope: "world", config: true, type: Boolean, default: true,
+      onChange: (v) => toggleFeature(cls, v),
+    });
+  }
 
   // ── Barre de gabarits ──────────────────────────────────────────────────────
   game.settings.register(MODULE_ID, "templateButtonSize", {

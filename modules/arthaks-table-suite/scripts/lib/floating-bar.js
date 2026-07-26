@@ -5,11 +5,10 @@
  * minimisé par utilisateur, contrainte dans la fenêtre, glisser-déposer via une
  * poignée, réaction au redimensionnement et nettoyage des hooks.
  *
- * Les sous-classes exposent l'élément racine via `this.el`. Chaque barre reçoit une
- * `key` distincte (« template », « combat », « token ») afin que les clés
- * localStorage de position/minimisation ne se chevauchent PAS entre barres — les
- * anciennes barres, quand elles étaient des modules séparés, avaient chacune leur
- * propre MODULE_ID ; ici elles partagent le même, d'où le sous-espace par `key`.
+ * Les sous-classes fournissent l'élément racine `this.el`, `collapsedClass` et
+ * `updateCollapseIcon(on)`. Chaque barre reçoit une `key` distincte (« template »,
+ * « combat », « token ») : comme toutes partagent le même MODULE_ID, c'est elle qui
+ * évite la collision des clés localStorage de position/minimisation entre barres.
  */
 import { MODULE_ID } from "../const.js";
 
@@ -27,14 +26,12 @@ export class FloatingBar {
   get posKey() { return `${MODULE_ID}.${this.key}.pos.${game.user.id}`; }
   get collapsedKey() { return `${MODULE_ID}.${this.key}.collapsed.${game.user.id}`; }
 
-  clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
   /** Positionne la barre en coordonnées absolues, contrainte dans la fenêtre. */
   setPos(left, top) {
     const bw = this.el.offsetWidth  || 200;
     const bh = this.el.offsetHeight || 40;
-    left = this.clamp(left, 4, window.innerWidth  - bw - 4);
-    top  = this.clamp(top,  4, window.innerHeight - bh - 4);
+    left = Math.clamp(left, 4, window.innerWidth  - bw - 4);
+    top  = Math.clamp(top,  4, window.innerHeight - bh - 4);
     this.el.style.left = `${Math.round(left)}px`;
     this.el.style.top  = `${Math.round(top)}px`;
     this.el.style.right = this.el.style.bottom = "auto";
@@ -50,21 +47,32 @@ export class FloatingBar {
     try { return JSON.parse(localStorage.getItem(this.posKey)); } catch { return null; }
   }
 
-  /** Position par défaut : dernière position mémorisée, sinon au-dessus de la hotbar. */
+  /** Position : dernière position mémorisée, sinon la position par défaut de la barre. */
   applyPosition() {
     const saved = this.readPos();
     if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
       return this.setPos(saved.left, saved.top);
     }
+    const { left, top } = this.defaultPosition();
+    this.setPos(left, top);
+  }
+
+  /** Position par défaut si rien n'est mémorisé : centrée au-dessus de la hotbar. Surchargeable. */
+  defaultPosition() {
     const hb = document.getElementById("hotbar");
     const r  = hb?.getBoundingClientRect();
     const bw = this.el.offsetWidth, bh = this.el.offsetHeight;
-    if (r && r.width) this.setPos(r.left + r.width / 2 - bw / 2, r.top - bh - 8);
-    else this.setPos((window.innerWidth - bw) / 2, window.innerHeight - bh - 90);
+    if (r && r.width) return { left: r.left + r.width / 2 - bw / 2, top: r.top - bh - 8 };
+    return { left: (window.innerWidth - bw) / 2, top: window.innerHeight - bh - 90 };
   }
 
   onResize() {
     if (!this.el) return;
+    this.reflow();
+  }
+
+  /** Re-place la barre après un changement de taille/fenêtre. Défaut : re-contraindre la position courante. */
+  reflow() {
     const r = this.el.getBoundingClientRect();
     this.setPos(r.left, r.top);
   }
@@ -87,6 +95,29 @@ export class FloatingBar {
       handle.addEventListener("pointermove", onMove);
       handle.addEventListener("pointerup", onUp);
     });
+  }
+
+  /** Crée la poignée de déplacement (icône grip), déjà rendue déplaçable via initDrag. */
+  makeHandle(className, tooltip = "Glisser pour déplacer la barre") {
+    const handle = document.createElement("i");
+    handle.className = `fas fa-grip-vertical ${className}`;
+    handle.dataset.tooltip = tooltip;
+    this.initDrag(handle);
+    return handle;
+  }
+
+  // ── Minimiser (état persisté par utilisateur) ───────────────────────────────
+  // Les sous-classes fournissent `collapsedClass` (nom de la classe CSS) et
+  // `updateCollapseIcon(on)` (met à jour l'icône/tooltip de leur bouton toggle).
+  isCollapsed() { return this.el.classList.contains(this.collapsedClass); }
+
+  toggleCollapsed() { this.setCollapsed(!this.isCollapsed()); }
+
+  setCollapsed(on) {
+    this.el.classList.toggle(this.collapsedClass, on);
+    localStorage.setItem(this.collapsedKey, on ? "1" : "0");
+    this.updateCollapseIcon(on);
+    this.reflow(); // la largeur a changé : re-contraindre / ré-ancrer.
   }
 
   /** Désenregistre les hooks, retire l'écouteur de resize, supprime l'élément. */

@@ -206,12 +206,19 @@ function buildSections(actor) {
 
   // Sorts : cantrips à part, puis un groupe par niveau (avec slots restants/total).
   if (CFG.includeSpells) {
-    const spells = actor.items.filter(isUsableSpellItem);
-    const cantrips = dedupeByName(spells.filter(s => Number(s.system?.level) === 0)).sort(byName);
+    // Un seul passage : regroupe les sorts par niveau (0 = cantrips) dans une Map.
+    const byLevel = new Map();
+    for (const s of actor.items.filter(isUsableSpellItem)) {
+      const lvl = Number(s.system?.level) || 0;
+      (byLevel.get(lvl) ?? byLevel.set(lvl, []).get(lvl)).push(s);
+    }
+    const prep = (lvl) => dedupeByName(byLevel.get(lvl) ?? []).sort(byName);
+
+    const cantrips = prep(0);
     if (cantrips.length) sections.push({ label: "Cantrips", cssClass: "ab-cantrip", items: cantrips });
 
     for (let lvl = 1; lvl <= 9; lvl++) {
-      const items = dedupeByName(spells.filter(s => Number(s.system?.level) === lvl)).sort(byName);
+      const items = prep(lvl);
       if (!items.length) continue;
       const slot = actor.system?.spells?.[`spell${lvl}`];
       const slotText = (slot && Number(slot.max) > 0) ? `${slot.value ?? 0}/${slot.max}` : "";
@@ -318,12 +325,8 @@ export class TokenActionBar extends FloatingBar {
     this.bar.style.display = "flex";
 
     // Poignée de déplacement (masquée quand la barre est ancrée).
-    const handle = document.createElement("i");
-    handle.className = "fas fa-grip-vertical ab-handle";
-    handle.dataset.tooltip = "Glisser pour déplacer la barre";
-    this.initDrag(handle);
-    this.bar.appendChild(handle);
-    this.handle = handle;
+    this.handle = this.makeHandle("ab-handle");
+    this.bar.appendChild(this.handle);
 
     // Libellé (repliable).
     const label = document.createElement("div");
@@ -430,22 +433,19 @@ export class TokenActionBar extends FloatingBar {
     return btn;
   }
 
-  // ── Minimiser ────────────────────────────────────────────────────────────
-  toggleCollapsed() {
-    const on = !this.bar.classList.contains("ab-collapsed");
-    this.bar.classList.toggle("ab-collapsed", on);
-    localStorage.setItem(this.collapsedKey, on ? "1" : "0");
+  // ── Minimiser (skeleton dans FloatingBar) ──────────────────────────────────
+  get collapsedClass() { return "ab-collapsed"; }
+
+  updateCollapseIcon(on) {
     const icon = this.bar.querySelector(".ab-toggle i");
     if (icon) icon.className = `fas fa-chevron-${on ? "right" : "left"}`;
     const toggle = this.bar.querySelector(".ab-toggle");
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
-    // Ré-ancre (ou re-clampe en mode libre) après le changement de dimensions.
-    this.applyDockOrFree();
   }
 
   // ── Position ─────────────────────────────────────────────────────────────
-  // clamp / setPos / savePos / readPos / applyPosition / initDrag : hérités de
-  // FloatingBar. onResize et l'ancrage aux bords (applyDockOrFree) sont spécifiques.
+  // Placement spécifique : ancrage aux bords OU libre. `reflow` (appelé par la base
+  // au resize et à la minimisation) délègue ici ; applyPosition reste hérité.
 
   // Ancre la barre sur un bord selon le réglage, ou la laisse libre (glisser).
   applyDockOrFree() {
@@ -477,10 +477,8 @@ export class TokenActionBar extends FloatingBar {
     this.setPos(left, top);
   }
 
-  // applyPosition() : hérité de FloatingBar (repli au-dessus de la hotbar).
-
-  // onResize : override — respecte l'ancrage aux bords (sinon re-clampe en mode libre).
-  onResize() {
+  // reflow : override — respecte l'ancrage aux bords (sinon re-clampe la position courante).
+  reflow() {
     if (!this.bar || this.bar.style.display === "none") return;
     if ((CFG.dockPosition || "bottom-center") !== "free") return this.applyDockOrFree();
     const r = this.bar.getBoundingClientRect();

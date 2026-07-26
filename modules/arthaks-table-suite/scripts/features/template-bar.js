@@ -21,9 +21,6 @@
  *  - Clic sur 🗑        → supprime ses gabarits (tous, si MJ).
  *  - Bouton ⟨ / ⟩       → minimise / ré-étend la barre.
  *  - Poignée (⋮⋮)       → glisser pour déplacer la barre (position mémorisée).
- *
- * (Le masquage de l'interface des joueurs — « Hide player HUD » — vit désormais
- * dans son propre module « arthaks-table-hide-hud ».)
  */
 
 import { MODULE_ID } from "../const.js";
@@ -81,11 +78,7 @@ export class SpellTemplateBar extends FloatingBar {
     document.body.appendChild(bar);
 
     // Poignée de déplacement.
-    const handle = document.createElement("i");
-    handle.className = "fas fa-grip-vertical tb-handle";
-    handle.dataset.tooltip = "Glisser pour déplacer la barre";
-    this.initDrag(handle);
-    bar.appendChild(handle);
+    bar.appendChild(this.makeHandle("tb-handle"));
 
     // Libellé (repliable).
     const label = document.createElement("div");
@@ -184,23 +177,14 @@ export class SpellTemplateBar extends FloatingBar {
     this.bar?.style.setProperty("--tb-btn", `${size}px`);
   }
 
-  // ── Minimiser ──────────────────────────────────────────────────────────────
-  toggleCollapsed() {
-    this.setCollapsed(!this.bar.classList.contains("stb-collapsed"));
-  }
+  // ── Minimiser (skeleton dans FloatingBar) ──────────────────────────────────
+  get collapsedClass() { return "stb-collapsed"; }
 
-  setCollapsed(on) {
-    this.bar.classList.toggle("stb-collapsed", on);
+  updateCollapseIcon(on) {
     const icon = this.toggleIcon.querySelector("i");
     icon.className = on ? "fas fa-chevron-right" : "fas fa-chevron-left";
     this.toggleIcon.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
-    localStorage.setItem(this.collapsedKey, on ? "1" : "0");
-    // Re-contraint la position (la largeur a changé).
-    const r = this.bar.getBoundingClientRect();
-    this.setPos(r.left, r.top);
   }
-
-  // Position / drag / mémorisation : hérités de FloatingBar (clé « template »).
 
   // ── Activation du mode gabarit ─────────────────────────────────────────────
   async activateTool(shape) {
@@ -239,7 +223,7 @@ export class SpellTemplateBar extends FloatingBar {
     await ui.controls.activate({ control: "regions", tool: shape });
     ui.controls.render();
 
-    this.bar.querySelectorAll(".tb-btn.tb-active").forEach(b => b.classList.remove("tb-active"));
+    this.clearActiveButtons();
     this.bar.querySelector(`.tb-btn[data-shape="${shape}"]`)?.classList.add("tb-active");
   }
 

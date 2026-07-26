@@ -127,7 +127,10 @@ export class CombatOverlay extends FloatingBar {
     // et quand les PV d'un acteur bougent (badges CA/PV à jour).
     this.hookIds.targetToken  = Hooks.on("targetToken", rerender);
     this.hookIds.controlToken = Hooks.on("controlToken", rerender);
-    this.hookIds.updateActor  = Hooks.on("updateActor", rerender);
+    // Ne resync que si l'acteur modifié participe au combat (symétrique d'updateToken).
+    this.hookIds.updateActor  = Hooks.on("updateActor", (actor) => {
+      if (this.combat?.combatants?.some(c => c.actorId === actor.id)) rerender();
+    });
   }
 
   // destroy() : hérité de FloatingBar.
@@ -197,7 +200,11 @@ export class CombatOverlay extends FloatingBar {
     const editing = started && this.editMode;
     const setupView = !started || editing;
 
-    root.classList.toggle("co-noimg", !game.settings.get(MODULE_ID, "showImages"));
+    // Réglages d'image lus une seule fois par rendu (utilisés par combattant ensuite).
+    this._showImages = game.settings.get(MODULE_ID, "showImages");
+    this._imageMode  = game.settings.get(MODULE_ID, "imageMode");
+
+    root.classList.toggle("co-noimg", !this._showImages);
     root.classList.toggle("co-setup", setupView);
     root.classList.toggle("co-combat", !setupView);
 
@@ -240,11 +247,7 @@ export class CombatOverlay extends FloatingBar {
     const header = document.createElement("div");
     header.className = "co-header";
 
-    const handle = document.createElement("i");
-    handle.className = "fas fa-grip-vertical co-handle";
-    handle.dataset.tooltip = "Glisser pour déplacer";
-    this.initDrag(handle);
-    header.appendChild(handle);
+    header.appendChild(this.makeHandle("co-handle", "Glisser pour déplacer"));
 
     const round = document.createElement("div");
     round.className = "co-round";
@@ -395,7 +398,7 @@ export class CombatOverlay extends FloatingBar {
     card.classList.toggle("co-npc", c.isNPC);
     card.dataset.combatantId = c.id;
 
-    if (game.settings.get(MODULE_ID, "showImages")) {
+    if (this._showImages) {
       const p = document.createElement("div");
       p.className = "co-portrait";
       const img = document.createElement("img");
@@ -455,7 +458,7 @@ export class CombatOverlay extends FloatingBar {
 
     const face = document.createElement("div");
     face.className = "co-face";
-    if (game.settings.get(MODULE_ID, "showImages")) {
+    if (this._showImages) {
       const img = document.createElement("img");
       img.src = this.imgFor(c);
       img.alt = c.name;
@@ -475,20 +478,21 @@ export class CombatOverlay extends FloatingBar {
   }
 
   hpColor(actor) {
-    if (this.actorDead(actor)) return "#5b6270";
+    if (this.actorHasDead(actor)) return "#5b6270";
     const r = this.hpRatioOf(actor);
     if (r === null) return "#5b9bd8";
     return r > 0.5 ? "#4cc96a" : r > 0.25 ? "#e8b04b" : "#e05a5a";
   }
 
-  actorDead(actor) {
+  /** L'acteur porte-t-il le statut « dead » via l'un de ses effets ? (prédicat partagé) */
+  actorHasDead(actor) {
     return actor?.effects?.some(e => e.statuses?.has("dead") || e.flags?.core?.statusId === "dead") ?? false;
   }
 
   combatantDead(c) {
     const tok = c.token?.object;
     if (tok && tok.document?.statuses?.has("dead")) return true;
-    return this.actorDead(c.actor);
+    return this.actorHasDead(c.actor);
   }
 
   initialsOf(name) {
@@ -553,7 +557,7 @@ export class CombatOverlay extends FloatingBar {
     card.classList.toggle("co-pc", !isNPC);
     card.classList.toggle("co-npc", isNPC);
 
-    if (game.settings.get(MODULE_ID, "showImages")) {
+    if (this._showImages) {
       const img = document.createElement("img");
       img.className = "co-target-img";
       img.src = this.imgForToken(token);
@@ -578,10 +582,7 @@ export class CombatOverlay extends FloatingBar {
         const meta = document.createElement("div");
         meta.className = "co-target-stats co-card-stats";
         for (const s of stats) {
-          const badge = document.createElement("span");
-          badge.className = `co-stat co-stat-${s.key}`;
-          badge.innerHTML = `<i class="${s.icon}"></i>`;
-          badge.appendChild(document.createTextNode(` ${s.value}`));
+          const badge = this.statBadge(s);
           // Badge PV cliquable → édition inline du delta (si on possède l'acteur).
           if (s.key === "hp" && token.actor?.isOwner) {
             badge.classList.add("co-stat-editable");
@@ -710,9 +711,7 @@ export class CombatOverlay extends FloatingBar {
   /** Le token (ou son acteur) porte-t-il le statut « dead » ? */
   hasDeadStatus(token) {
     if (token.document?.statuses?.has("dead")) return true;
-    return token.actor?.effects?.some(
-      e => e.statuses?.has("dead") || e.flags?.core?.statusId === "dead"
-    ) ?? false;
+    return this.actorHasDead(token.actor);
   }
 
   /**
@@ -795,24 +794,12 @@ export class CombatOverlay extends FloatingBar {
   }
 
   // ── Données ────────────────────────────────────────────────────────────
-  /** Source d'image selon le réglage, avec repli si vidéo/manquante. */
-  imgFor(c) {
-    const mode = game.settings.get(MODULE_ID, "imageMode");
-    const token = c.token?.texture?.src || c.img;
-    const actor = c.actor?.img;
-    let src = mode === "token" ? (token || actor) : (actor || token);
-    if (!src || VIDEO_RE.test(src)) {
-      const alt = mode === "token" ? actor : token;
-      src = (alt && !VIDEO_RE.test(alt)) ? alt : MYSTERY_MAN;
-    }
-    return src;
-  }
-
-  /** Comme imgFor, mais pour un Token placé sur la scène (cible / sélection). */
-  imgForToken(token) {
-    const mode = game.settings.get(MODULE_ID, "imageMode");
-    const tokenSrc = token.document?.texture?.src;
-    const actorSrc = token.actor?.img;
+  /**
+   * Choisit la source d'image (token ou acteur) selon le réglage imageMode (lu
+   * une fois par rendu dans this._imageMode), avec repli si vidéo/manquante.
+   */
+  pickImg(tokenSrc, actorSrc) {
+    const mode = this._imageMode;
     let src = mode === "token" ? (tokenSrc || actorSrc) : (actorSrc || tokenSrc);
     if (!src || VIDEO_RE.test(src)) {
       const alt = mode === "token" ? actorSrc : tokenSrc;
@@ -820,6 +807,12 @@ export class CombatOverlay extends FloatingBar {
     }
     return src;
   }
+
+  /** Image d'un combattant (rail / carte du courant). */
+  imgFor(c) { return this.pickImg(c.token?.texture?.src || c.img, c.actor?.img); }
+
+  /** Image d'un Token placé sur la scène (cible / sélection). */
+  imgForToken(token) { return this.pickImg(token.document?.texture?.src, token.actor?.img); }
 
   /** Termine et clôture le combat après confirmation (MJ). */
   async endCombat(combat) {
@@ -898,27 +891,16 @@ export class CombatOverlay extends FloatingBar {
     this.root?.style.setProperty("--co-spot", `${spot}px`);
   }
 
-  toggleCollapsed() {
-    const on = !this.root.classList.contains("co-collapsed");
-    this.root.classList.toggle("co-collapsed", on);
-    localStorage.setItem(this.collapsedKey, on ? "1" : "0");
-    const r = this.root.getBoundingClientRect();
-    this.setPos(r.left, r.top);
-    // Met à jour l'icône du toggle immédiatement.
+  // Minimiser (skeleton dans FloatingBar) : chevron vertical (haut/bas).
+  get collapsedClass() { return "co-collapsed"; }
+
+  updateCollapseIcon(on) {
     const icon = this.root.querySelector(".co-toggle i");
     if (icon) icon.className = `fas fa-chevron-${on ? "down" : "up"}`;
     const toggle = this.root.querySelector(".co-toggle");
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre" : "Minimiser";
   }
 
-  // ── Position ──────────────────────────────────────────────────────────────
-  // clamp / setPos / savePos / readPos / onResize / initDrag : hérités de FloatingBar.
-  // Seule la position PAR DÉFAUT diffère (coin supérieur gauche plutôt que hotbar).
-  applyPosition() {
-    const saved = this.readPos();
-    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-      return this.setPos(saved.left, saved.top);
-    }
-    this.setPos(10, 80); // par défaut : coin supérieur gauche de la scène.
-  }
+  // Position : héritée de FloatingBar ; seul le défaut change (coin haut-gauche).
+  defaultPosition() { return { left: 10, top: 80 }; }
 }
