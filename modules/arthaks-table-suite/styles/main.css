@@ -592,3 +592,27 @@ body.ahh-hide-hud.ahh-show-chat #sidebar-content #chat {
   flex: 0 0 auto;
   margin: 0;
 }
+
+/* ── Panneaux de réglages par barre (ApplicationV2, bouton « Configurer… ») ──── */
+.ats-settings-panel .ats-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.ats-settings-panel .form-group {
+  margin: 0;
+}
+
+.ats-settings-panel .form-group > label {
+  font-weight: 600;
+}
+
+.ats-settings-panel select,
+.ats-settings-panel input[type="text"],
+.ats-settings-panel input[type="number"] {
+  width: 100%;
+}
