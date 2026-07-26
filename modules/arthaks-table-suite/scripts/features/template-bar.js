@@ -132,7 +132,7 @@ export class SpellTemplateBar extends FloatingBar {
     // État minimisé mémorisé.
     if (localStorage.getItem(this.collapsedKey) === "1") this.setCollapsed(true);
 
-    window.addEventListener("resize", this.onResize);
+    this.attachViewportHandlers();
     this.registerHooks();
     this.refreshEmanationState();
     notify.info("Barre de gabarits prête.");

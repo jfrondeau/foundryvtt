@@ -261,7 +261,7 @@ export class TokenActionBar extends FloatingBar {
     document.body.appendChild(this.bar);
 
     this.registerHooks();
-    window.addEventListener("resize", this.onResize);
+    this.attachViewportHandlers();
     this.render();
     notify.info("Barre d'action prête.");
   }
@@ -336,6 +336,17 @@ export class TokenActionBar extends FloatingBar {
     const sections = buildSections(actor);
     const wrap = document.createElement("div");
     wrap.className = "ab-items ab-collapsible";
+
+    // Molette de la souris → défilement le long de l'axe de la barre. En mode
+    // horizontal, la molette verticale ne défilerait pas la zone sans cela ; en
+    // vertical, le défilement natif suffit. On ne bloque l'événement que s'il y a
+    // réellement débordement (sinon on laisse passer le zoom de la carte).
+    wrap.addEventListener("wheel", (ev) => {
+      if (this.bar.classList.contains("fb-vertical")) return;
+      if (wrap.scrollWidth <= wrap.clientWidth) return;
+      wrap.scrollLeft += ev.deltaY + ev.deltaX;
+      ev.preventDefault();
+    }, { passive: false });
 
     for (const section of sections) {
       // Chaque section = un bloc vertical : mini-libellé au-dessus, icônes en dessous.
@@ -434,4 +445,25 @@ export class TokenActionBar extends FloatingBar {
   // déclare seulement sa clé de réglage et son ancrage par défaut.
   get dockSettingKey() { return "dockPosition"; }
   get defaultDock() { return "bottom-center"; }
+
+  /**
+   * Plafonne la barre à l'espace utile selon son orientation : largeur limitée au
+   * bord gauche de la sidebar (barre horizontale), hauteur limitée à la fenêtre
+   * (barre verticale). Au-delà, `.ab-items` défile (voir CSS + molette dans render)
+   * au lieu d'allonger la barre hors écran.
+   */
+  constrainSize() {
+    if (!this.bar || this.bar.style.display === "none") return;
+    // Orientation déduite de l'ancrage (fiable même avant que la classe fb-vertical
+    // ne soit posée par applyDock) : gauche/droite → verticale, sinon horizontale.
+    const dock = this.getDock();
+    const vertical = dock.startsWith("left") || dock.startsWith("right");
+    if (vertical) {
+      this.bar.style.maxWidth = "";
+      this.bar.style.maxHeight = `${window.innerHeight - 8}px`;
+    } else {
+      this.bar.style.maxHeight = "";
+      this.bar.style.maxWidth = `${Math.max(120, this.usableRight() - 8)}px`;
+    }
+  }
 }

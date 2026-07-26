@@ -102,7 +102,7 @@ export class CombatOverlay extends FloatingBar {
   // ── Cycle de vie ─────────────────────────────────────────────────────────
   init() {
     this.registerHooks();
-    window.addEventListener("resize", this.onResize);
+    this.attachViewportHandlers();
     this.sync();
     notify.info("Overlay de combat prêt.");
   }

@@ -438,6 +438,10 @@
 #selected-token-actions .ab-items {
   display: flex; align-items: flex-end; gap: 6px;
   overflow-x: auto; overflow-y: hidden; padding: 2px;
+  /* flex:1 + min-width:0 → cette zone rétrécit et DÉFILE quand la barre atteint sa
+     largeur max, au lieu de pousser la barre hors écran. Poignée, libellé et bouton
+     minimiser (flex:0 0 auto) restent fixes. */
+  flex: 1 1 auto; min-width: 0;
 }
 #selected-token-actions .ab-items::-webkit-scrollbar { height: 6px; }
 #selected-token-actions .ab-items::-webkit-scrollbar-thumb { background: #666; border-radius: 3px; }
@@ -516,7 +520,9 @@
 #selected-token-actions.fb-vertical .ab-label { margin-right: 0; }
 #selected-token-actions.fb-vertical .ab-items {
   flex-direction: column; align-items: center;
-  overflow-x: hidden; overflow-y: auto; max-height: 74vh;
+  overflow-x: hidden; overflow-y: auto;
+  /* En vertical, la zone défile sur la hauteur ; min-height:0 l'autorise à rétrécir. */
+  min-height: 0; min-width: 0;
 }
 /* Chaque section empile ses boutons en colonne → une seule colonne d'icônes. */
 #selected-token-actions.fb-vertical .ab-row { flex-direction: column; }

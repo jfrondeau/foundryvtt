@@ -35,12 +35,31 @@ export class FloatingBar {
   setPos(left, top, edge = 4) {
     const bw = this.el.offsetWidth  || 200;
     const bh = this.el.offsetHeight || 40;
-    left = Math.clamp(left, edge, window.innerWidth  - bw - edge);
-    top  = Math.clamp(top,  edge, window.innerHeight - bh - edge);
+    // Le coin haut-gauche (la poignée) reste toujours visible : si la barre est plus
+    // large/haute que l'espace utile, on privilégie le bord gauche/haut plutôt que de
+    // la pousser hors écran (Math.max borne le max à `edge` quand min > max).
+    const maxLeft = Math.max(edge, this.usableRight() - bw - edge);
+    const maxTop  = Math.max(edge, window.innerHeight - bh - edge);
+    left = Math.clamp(left, edge, maxLeft);
+    top  = Math.clamp(top,  edge, maxTop);
     this.el.style.left = `${Math.round(left)}px`;
     this.el.style.top  = `${Math.round(top)}px`;
     this.el.style.right = this.el.style.bottom = "auto";
     this.el.style.transform = "none";
+  }
+
+  /**
+   * Bord droit utilisable : la sidebar de Foundry (chat, combat…) est exclue pour
+   * que les barres ne la recouvrent jamais. Quand la sidebar est visible et ancrée
+   * dans la moitié droite de l'écran, le bord utile s'arrête à son bord gauche ;
+   * sinon on prend toute la largeur de la fenêtre. Suit son ouverture/fermeture
+   * (voir attachViewportHandlers).
+   */
+  usableRight() {
+    const W = window.innerWidth;
+    const r = document.getElementById("sidebar")?.getBoundingClientRect();
+    if (r && r.width > 0 && r.left > W / 2) return r.left;
+    return W;
   }
 
   savePos() {
@@ -77,15 +96,40 @@ export class FloatingBar {
   }
 
   /**
+   * Branche la barre sur les changements de mise en page : redimensionnement de la
+   * fenêtre + ouverture/fermeture de la sidebar (chat…). On observe directement la
+   * largeur de `#sidebar` via ResizeObserver plutôt qu'un hook Foundry précis : ça
+   * suit toute la transition et reste robuste entre versions. À appeler depuis
+   * l'init de chaque sous-classe ; `destroy()` nettoie l'écouteur et l'observateur.
+   */
+  attachViewportHandlers() {
+    window.addEventListener("resize", this.onResize);
+    const sb = document.getElementById("sidebar");
+    if (sb && "ResizeObserver" in window) {
+      this._sidebarRO = new ResizeObserver(() => this.onResize());
+      this._sidebarRO.observe(sb);
+    }
+  }
+
+  /**
    * Re-place la barre après un changement de taille/fenêtre ou de minimisation.
    * Si la barre est ancrée à un bord, on la ré-ancre ; sinon on re-contraint la
    * position courante dans la fenêtre.
    */
   reflow() {
+    this.constrainSize();
     if (this.dockSettingKey && this.getDock() !== "free") return this.applyDock();
     const r = this.el.getBoundingClientRect();
     this.setPos(r.left, r.top);
   }
+
+  /**
+   * Point d'extension : plafonne la taille de la barre à l'espace utile pour qu'elle
+   * ne dépasse jamais (sa zone de contenu défile alors au lieu de s'allonger). No-op
+   * par défaut ; surchargé par les barres susceptibles de déborder (token). Appelé
+   * avant tout (re)positionnement, quand les dimensions viennent d'être recalculées.
+   */
+  constrainSize() {}
 
   /**
    * Rend `handle` déplaçable. Pendant le glisser, la proximité d'un bord fait
@@ -157,6 +201,7 @@ export class FloatingBar {
    */
   applyDock() {
     if (!this.el || this.el.style.display === "none") return;
+    this.constrainSize();
     const dock = this.getDock();
     const docked = dock !== "free";
     const vertical = dock.startsWith("left") || dock.startsWith("right");
@@ -170,7 +215,7 @@ export class FloatingBar {
     const rawMargin = game.settings.get(MODULE_ID, "dockMargin");
     const m = Number.isFinite(rawMargin) ? rawMargin : 8;
     const bw = this.el.offsetWidth, bh = this.el.offsetHeight;
-    const W = window.innerWidth, H = window.innerHeight;
+    const W = this.usableRight(), H = window.innerHeight;
     const [edge, align] = dock.split("-");
     let left, top;
 
@@ -257,6 +302,7 @@ export class FloatingBar {
   destroy() {
     for (const [hook, id] of Object.entries(this.hookIds)) Hooks.off(hook, id);
     window.removeEventListener("resize", this.onResize);
+    this._sidebarRO?.disconnect();
     this._dropzone?.remove();
     this.el?.remove();
     this.constructor.instance = null;
