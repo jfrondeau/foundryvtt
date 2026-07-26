@@ -13,7 +13,7 @@ if (-not $Modules -or $Modules.Count -eq 0) { $Modules = $all }
 if (-not (Test-Path $destDir)) { throw "Share inaccessible : $destDir" }
 
 foreach ($m in $Modules) {
-    $src  = Join-Path $root $m
+    $src  = Join-Path (Join-Path $root "modules") $m
     $dest = Join-Path $destDir $m
     if (-not (Test-Path (Join-Path $src "module.json"))) { throw "Module introuvable : $src" }
 
