@@ -55,7 +55,8 @@
   opacity: .35; cursor: not-allowed; pointer-events: none;
   border-color: #666; background: rgba(120, 120, 120, 0.15);
 }
-#spell-template-bar .tb-btn i { font-size: 16px; pointer-events: none; }
+/* Icône proportionnelle à la taille du bouton (16/40 = 0.4). */
+#spell-template-bar .tb-btn i { font-size: calc(var(--tb-btn) * 0.4); pointer-events: none; }
 
 #spell-template-bar .tb-trash {
   border-color: #b5484a; background: rgba(181, 72, 74, 0.15);
@@ -105,6 +106,7 @@
    haut, puis chaque COLONNE (rail, détail, liste). Même fond → jonctions
    invisibles ; le vide sous la colonne la plus courte laisse voir la carte. */
 #combat-overlay .co-header,
+#combat-overlay .co-nav,
 #combat-overlay .co-rail,
 #combat-overlay .co-detail,
 #combat-overlay .co-editlist {
@@ -112,6 +114,12 @@
   background: rgba(14, 16, 22, 0.85);
   backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
 }
+/* Barre de navigation de tour : strip sous l'en-tête, boutons centrés. */
+#combat-overlay .co-nav {
+  display: flex; justify-content: center; gap: 8px;
+  padding: 5px 6px;
+}
+#combat-overlay .co-nav .co-btn { width: 34px; height: 34px; }
 /* Coins arrondis seulement à l'extérieur ; jonctions internes franches. */
 #combat-overlay .co-header { border-radius: 8px 8px 0 0; }
 #combat-overlay .co-rail { border-radius: 0 0 0 8px; }
@@ -211,7 +219,7 @@
 #combat-overlay .co-thumbwrap.co-hidden { opacity: .5; }
 /* Camp = ligne entière colorée + liseré gauche (identique à la vue préparation). */
 #combat-overlay .co-rail .co-thumbwrap {
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 3px; border-radius: 6px; border-left: 3px solid transparent; transition: background .1s ease;
 }
 #combat-overlay .co-rail .co-thumbwrap.co-pc  { background: rgba(91, 155, 216, 0.16); border-left-color: var(--co-pc); }
@@ -222,19 +230,12 @@
 }
 
 /* ── Orientation horizontale (ancrage haut / bas) : combattants côte à côte ────── */
-/* Le rail (vue combat) et la liste (vue setup) passent en rangée, avec défilement
-   horizontal. Les colonnes empilées deviennent des bandes larges. */
+/* Seul le RAIL (vue combat) passe en rangée. La vue préparation/édition reste
+   VERTICALE (liste éditable plus confortable), même barre ancrée horizontalement. */
 #combat-overlay.fb-horizontal .co-rail {
   flex-direction: row; align-items: stretch;
   max-height: none; max-width: 88vw; overflow-x: auto; overflow-y: visible;
 }
-#combat-overlay.fb-horizontal .co-editlist { min-width: 0; max-width: 88vw; max-height: none; }
-#combat-overlay.fb-horizontal .co-erows { flex-direction: row; overflow-x: auto; overflow-y: visible; }
-#combat-overlay.fb-horizontal .co-erow { border-left: none; border-top: 3px solid transparent; }
-#combat-overlay.fb-horizontal .co-erow.co-pc  { border-top-color: var(--co-pc); }
-#combat-overlay.fb-horizontal .co-erow.co-npc { border-top-color: var(--co-npc); }
-#combat-overlay.fb-horizontal .co-erow.co-current { border-top-color: var(--co-current); }
-#combat-overlay.fb-horizontal .co-ename { max-width: 90px; }
 
 /* Vignette (rail + liste setup) : anneau PV + image/initiales */
 #combat-overlay .co-thumb { position: relative; width: var(--co-row); height: var(--co-row); border-radius: 50%; }
@@ -262,12 +263,26 @@
 #combat-overlay.co-noimg .co-thumbwrap.co-npc .co-face,
 #combat-overlay.co-noimg .co-erow.co-npc .co-face { background: radial-gradient(circle at 50% 30%, #d9706f, #8e3234); }
 
-#combat-overlay .co-initgem {
-  position: absolute; bottom: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 3px;
-  border-radius: 5px; background: rgba(0, 0, 0, 0.78); border: 1px solid var(--co-edge);
-  color: var(--co-gold); font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums;
-  display: grid; place-items: center; line-height: 1;
+/* Initiative affichée À CÔTÉ de la vignette (liste large) au lieu d'en surimpression. */
+#combat-overlay .co-init-side {
+  flex: 0 0 auto; min-width: 20px; text-align: center; line-height: 1;
+  color: var(--co-gold); font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums;
 }
+
+/* Mode SANS portraits : cartes texte de combattant dans le rail (nom + CA/PV). */
+#combat-overlay .co-list-card {
+  align-items: stretch; gap: 3px; padding: 5px 7px; cursor: pointer;
+  border-left: 3px solid transparent;
+}
+#combat-overlay .co-list-card.co-pc  { background: rgba(91, 155, 216, 0.16); border-left-color: var(--co-pc); }
+#combat-overlay .co-list-card.co-npc { background: rgba(201, 74, 76, 0.16);  border-left-color: var(--co-npc); }
+#combat-overlay .co-list-card.co-current-card {
+  background: rgba(255, 122, 26, 0.2); border: 2px solid var(--co-current);
+}
+#combat-overlay .co-list-card.co-hidden { opacity: .5; font-style: italic; }
+#combat-overlay .co-list-card.co-dead .co-card-name { text-decoration: line-through; opacity: .8; }
+#combat-overlay .co-list-head { display: flex; align-items: center; gap: 8px; }
+#combat-overlay .co-list-head .co-card-name { flex: 1 1 auto; text-align: left; }
 
 /* Variante « courant en place » : la carte du courant est insérée DANS le rail.
    Elle s'élargit à la largeur du portrait ; les autres vignettes restent centrées. */

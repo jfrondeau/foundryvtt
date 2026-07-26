@@ -76,15 +76,15 @@ const TokenBarConfig = makeSettingsPanel(
 const BAR_MENUS = new Map([
   [SpellTemplateBar, {
     menuKey: "templateBarMenu", panel: TemplateBarConfig, icon: "fa-solid fa-ruler-combined",
-    label: "Barre de gabarits — réglages", hint: "Ancrage et taille des boutons de la barre de gabarits.",
+    label: "Barre de gabarits", hint: "Ancrage et taille des boutons de la barre de gabarits.",
   }],
   [CombatOverlay, {
     menuKey: "combatBarMenu", panel: CombatBarConfig, icon: "fa-solid fa-swords",
-    label: "Suivi de combat — réglages", hint: "Ancrage, images, tailles et automatisations de l'overlay de combat.",
+    label: "Suivi de combat", hint: "Ancrage, images, tailles et automatisations de l'overlay de combat.",
   }],
   [TokenActionBar, {
     menuKey: "tokenBarMenu", panel: TokenBarConfig, icon: "fa-solid fa-hand-fist",
-    label: "Barre d'action du token — réglages", hint: "Ancrage, contenu (armes, features, sorts) et affichage de la barre.",
+    label: "Barre d'action du token", hint: "Ancrage, contenu (armes, features, sorts) et affichage de la barre.",
   }],
 ]);
 
@@ -221,8 +221,8 @@ export function registerSettings() {
   });
 
   game.settings.register(MODULE_ID, "showNextButton", {
-    name: "Afficher le bouton « Tour suivant »",
-    hint: "Ajoute un bouton de passage au tour suivant dans l'en-tête. Désactivé par défaut : le raccourci « . » suffit.",
+    name: "Afficher les boutons de tour",
+    hint: "Ajoute une ligne de boutons « tour précédent / suivant » sous l'en-tête (MJ). Désactivé par défaut : les raccourcis « . » et « , » suffisent.",
     scope: "client", config: false, type: Boolean, default: false,
     onChange: syncCombat,
   });
@@ -236,8 +236,8 @@ export function registerSettings() {
 
   game.settings.register(MODULE_ID, "currentImageSize", {
     name: "Taille du portrait du combattant courant (px)",
-    hint: "Grand portrait du combattant courant (et des cibles), affiché à côté du rail.",
-    scope: "client", config: false, type: Number, default: 132,
+    hint: "Grand portrait du combattant courant (et des cibles). Réglage commun à la table (affecte aussi la vue des joueurs).",
+    scope: "world", config: false, type: Number, default: 132,
     onChange: sizeCombat,
   });
 

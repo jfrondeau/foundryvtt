@@ -217,6 +217,12 @@ export class CombatOverlay extends FloatingBar {
     const visible = this.visibleCombatants(combat);
     const markerId = this.resolveMarkerId(combat, visible);
 
+    // Boutons de tour (précédent/suivant) sur leur propre ligne sous l'en-tête,
+    // si l'option est activée (MJ, hors mode préparation/édition).
+    if (!setupView && game.user.isGM && game.settings.get(MODULE_ID, "showNextButton")) {
+      root.appendChild(this.renderCombatNav(combat));
+    }
+
     const body = document.createElement("div");
     body.className = "co-body co-collapsible";
 
@@ -271,11 +277,9 @@ export class CombatOverlay extends FloatingBar {
     round.textContent = !started ? "Préparation" : (editing ? `Édition · Round ${combat.round}` : `Round ${combat.round}`);
     header.appendChild(round);
 
-    // Combat : bouton d'options ⋮ (bascule combat ↔ édition) + éventuel tour suivant.
+    // Combat : bouton d'options ⋮ (bascule combat ↔ édition). Les boutons de tour
+    // (précédent/suivant) sont sur leur propre ligne sous l'en-tête (renderCombatNav).
     if (game.user.isGM && started) {
-      if (!editing && game.settings.get(MODULE_ID, "showNextButton")) {
-        header.appendChild(this.makeBtn("fas fa-forward-step", "Tour suivant ( . )", () => combat.nextTurn()));
-      }
       const edit = this.makeBtn("fas fa-sliders", editing ? "Revenir au combat" : "Modifier l'initiative / options", () => this.toggleEdit());
       edit.classList.toggle("co-active", editing);
       header.appendChild(edit);
@@ -357,6 +361,15 @@ export class CombatOverlay extends FloatingBar {
     if (this.combat) this.render(this.combat);
   }
 
+  /** Ligne de navigation de tour (précédent + suivant) sous l'en-tête (option MJ). */
+  renderCombatNav(combat) {
+    const nav = document.createElement("div");
+    nav.className = "co-nav co-collapsible";
+    nav.appendChild(this.makeBtn("fas fa-backward-step", "Tour précédent ( , )", () => combat.previousTurn()));
+    nav.appendChild(this.makeBtn("fas fa-forward-step", "Tour suivant ( . )", () => combat.nextTurn()));
+    return nav;
+  }
+
   // ── Vue « combat » : rail fin + carte de détail ───────────────────────────
   renderRail(visible, markerId) {
     const rail = document.createElement("div");
@@ -364,31 +377,34 @@ export class CombatOverlay extends FloatingBar {
     const showInit = !game.settings.get(MODULE_ID, "hideInitInCombat");
 
     for (const c of visible) {
+      const isCurrent = c.id === markerId;
+
+      // Mode SANS portraits : chaque combattant en carte texte (nom + CA/PV),
+      // le courant surligné — plutôt qu'une pastille d'initiales + anneau PV.
+      if (!this._showImages) {
+        rail.appendChild(this.renderListCard(c, isCurrent, showInit));
+        continue;
+      }
+
       // Mode « courant en place » : le combattant à son tour s'agrandit
-      // directement dans la liste (portrait + nom + stats), au lieu d'une carte
-      // dupliquée à droite.
-      if (this._inlineCurrent && c.id === markerId) {
+      // directement dans la liste (portrait + nom + stats).
+      if (this._inlineCurrent && isCurrent) {
         rail.appendChild(this.renderRailCurrentCard(c));
         continue;
       }
 
       const item = document.createElement("div");
       item.className = "co-thumbwrap";
-      item.classList.toggle("co-current", c.id === markerId);
+      item.classList.toggle("co-current", isCurrent);
       item.classList.toggle("co-pc", !c.isNPC);
       item.classList.toggle("co-npc", c.isNPC);
       item.classList.toggle("co-hidden", !!c.hidden);
       item.classList.toggle("co-dead", this.combatantDead(c));
       item.dataset.combatantId = c.id;
 
-      const thumb = this.thumbEl(c, { ember: c.id === markerId });
-      if (showInit) {
-        const gem = document.createElement("div");
-        gem.className = "co-initgem";
-        gem.textContent = (c.initiative ?? "–");
-        thumb.appendChild(gem);
-      }
-      item.appendChild(thumb);
+      item.appendChild(this.thumbEl(c, { ember: isCurrent }));
+      // Init affichée À CÔTÉ de la vignette (liste large), pas en surimpression.
+      if (showInit) item.appendChild(this.initLabel(c));
 
       item.dataset.tooltip = c.name;
       item.addEventListener("click", () => this.focusToken(c));
@@ -396,6 +412,53 @@ export class CombatOverlay extends FloatingBar {
       rail.appendChild(item);
     }
     return rail;
+  }
+
+  /** Petite étiquette d'initiative affichée à côté d'un combattant (or, tabulaire). */
+  initLabel(c) {
+    const hasInit = c.initiative !== null && c.initiative !== undefined;
+    const el = document.createElement("div");
+    el.className = "co-init-side";
+    el.textContent = hasInit ? c.initiative : "–";
+    return el;
+  }
+
+  /**
+   * Carte texte d'un combattant pour le mode SANS portraits : nom (+ init à côté)
+   * et badges CA/PV (MJ). Le courant reçoit le style de carte surlignée.
+   */
+  renderListCard(c, isCurrent, showInit) {
+    const card = document.createElement("div");
+    card.className = "co-card co-list-card";
+    card.classList.toggle("co-current-card", isCurrent);
+    card.classList.toggle("co-pc", !c.isNPC);
+    card.classList.toggle("co-npc", c.isNPC);
+    card.classList.toggle("co-hidden", !!c.hidden);
+    card.classList.toggle("co-dead", this.combatantDead(c));
+    card.dataset.combatantId = c.id;
+
+    const head = document.createElement("div");
+    head.className = "co-list-head";
+    if (showInit) head.appendChild(this.initLabel(c));
+    const name = document.createElement("div");
+    name.className = "co-card-name";
+    name.textContent = this.combatantDead(c) ? `☠ ${c.name}` : c.name;
+    head.appendChild(name);
+    card.appendChild(head);
+
+    if (game.user.isGM) {
+      const stats = this.actorStats(c.actor);
+      if (stats.length) {
+        const meta = document.createElement("div");
+        meta.className = "co-card-stats";
+        for (const s of stats) meta.appendChild(this.statBadge(s));
+        card.appendChild(meta);
+      }
+    }
+
+    card.addEventListener("click", () => this.focusToken(c));
+    card.addEventListener("dblclick", () => this.openSheet(c));
+    return card;
   }
 
   /**
@@ -632,17 +695,13 @@ export class CombatOverlay extends FloatingBar {
     card.classList.toggle("co-pc", !isNPC);
     card.classList.toggle("co-npc", isNPC);
 
+    // Mode SANS portraits : pas de pastille d'initiales, juste nom + CA/PV.
     if (this._showImages) {
       const img = document.createElement("img");
       img.className = "co-target-img";
       img.src = this.imgForToken(token, this._featuredImageMode);
       img.alt = token.name;
       card.appendChild(img);
-    } else {
-      const face = document.createElement("div");
-      face.className = "co-target-img co-target-face";
-      face.textContent = this.initialsOf(token.name);
-      card.appendChild(face);
     }
 
     const name = document.createElement("div");
