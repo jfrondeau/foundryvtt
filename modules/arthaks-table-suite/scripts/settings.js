@@ -97,6 +97,13 @@ export function registerSettings() {
     onChange: syncCombat,
   });
 
+  game.settings.register(MODULE_ID, "combatCurrentInline", {
+    name: "Combat · Courant affiché dans la liste",
+    hint: "Le combattant à son tour s'agrandit EN PLACE dans la liste, avec les cibles flottantes à sa droite. Désactivé : ancien affichage — portrait du courant et cibles regroupés dans une colonne à droite.",
+    scope: "client", config: true, type: Boolean, default: true,
+    onChange: syncCombat,
+  });
+
   game.settings.register(MODULE_ID, "showImages", {
     name: "Combat · Afficher les portraits",
     hint: "Rail avec les images des combattants (créature / personnage). Désactivé : pastilles compactes avec initiales.",

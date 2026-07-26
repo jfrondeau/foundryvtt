@@ -203,6 +203,8 @@ export class CombatOverlay extends FloatingBar {
     // Réglages d'image lus une seule fois par rendu (utilisés par combattant ensuite).
     this._showImages = game.settings.get(MODULE_ID, "showImages");
     this._imageMode  = game.settings.get(MODULE_ID, "imageMode");
+    // Disposition du courant : « en place » dans la liste (défaut) ou colonne à droite.
+    this._inlineCurrent = game.settings.get(MODULE_ID, "combatCurrentInline");
 
     root.classList.toggle("co-noimg", !this._showImages);
     root.classList.toggle("co-setup", setupView);
@@ -221,14 +223,25 @@ export class CombatOverlay extends FloatingBar {
       body.appendChild(this.renderEditList(visible, markerId));
     } else {
       body.appendChild(this.renderRail(visible, markerId));
-      const detail = this.renderDetail(visible, markerId);
-      if (detail) body.appendChild(detail);
+      if (this._inlineCurrent) {
+        // Cibles flottantes accolées à droite de l'image du courant.
+        const float = this.renderFloatingTargets();
+        if (float) body.appendChild(float);
+      } else {
+        // Ancien affichage : carte du courant + cibles dans une colonne à droite.
+        const detail = this.renderDetail(visible, markerId);
+        if (detail) body.appendChild(detail);
+      }
     }
 
     root.appendChild(body);
 
     // L'innerHTML vient d'être reconstruit (dimensions modifiées) : ré-ancrer.
     this.applyDock();
+
+    // Le panneau flottant est positionné après attache au DOM et ré-ancrage
+    // (la mesure de layout doit refléter la position/taille finales).
+    if (!setupView && this._inlineCurrent) this.positionFloatingTargets();
   }
 
   /**
@@ -353,6 +366,14 @@ export class CombatOverlay extends FloatingBar {
     const showInit = !game.settings.get(MODULE_ID, "hideInitInCombat");
 
     for (const c of visible) {
+      // Mode « courant en place » : le combattant à son tour s'agrandit
+      // directement dans la liste (portrait + nom + stats), au lieu d'une carte
+      // dupliquée à droite.
+      if (this._inlineCurrent && c.id === markerId) {
+        rail.appendChild(this.renderRailCurrentCard(c));
+        continue;
+      }
+
       const item = document.createElement("div");
       item.className = "co-thumbwrap";
       item.classList.toggle("co-current", c.id === markerId);
@@ -379,7 +400,20 @@ export class CombatOverlay extends FloatingBar {
     return rail;
   }
 
-  /** Panneau de détail à côté du rail : carte du courant + panneau cible. */
+  /**
+   * Carte du courant insérée EN PLACE dans le rail (variante) : réutilise la carte
+   * du courant, taggée pour la mettre en forme au sein de la liste.
+   */
+  renderRailCurrentCard(c) {
+    const card = this.renderCurrentCard(c);
+    card.classList.add("co-current-inline");
+    return card;
+  }
+
+  /**
+   * Panneau de détail à côté du rail (mode « colonne à droite » uniquement) :
+   * carte du courant + panneau cible.
+   */
   renderDetail(visible, markerId) {
     const detail = document.createElement("div");
     detail.className = "co-detail";
@@ -391,6 +425,50 @@ export class CombatOverlay extends FloatingBar {
     if (victims.length) detail.appendChild(this.renderTargetPanel(victims));
 
     return detail.children.length ? detail : null;
+  }
+
+  /** Panneau cible flottant, accolé à droite de l'image du courant (mode « en place »). */
+  renderFloatingTargets() {
+    const victims = this.resolveVictims();
+    if (!victims.length) return null;
+    const panel = this.renderTargetPanel(victims);
+    panel.classList.add("co-targets-float");
+    return panel;
+  }
+
+  /**
+   * Positionne le panneau cible flottant (mode « en place ») à droite du rail,
+   * aligné sur le HAUT de la carte du courant. S'il déborde sous le bas STRICT du
+   * rail, on le remonte pour aligner son bas sur le bas du rail. Exception : si le
+   * panneau est plus haut que le rail, on garde l'alignement haut et on le laisse
+   * dépasser en bas. Positionnement absolu relatif au root (position: fixed), donc
+   * hors du clip du rail (overflow) et insensible au glissement horizontal.
+   */
+  positionFloatingTargets() {
+    const root = this.root;
+    const panel = root?.querySelector(".co-targets-float");
+    if (!panel) return;
+    const rail = root.querySelector(".co-rail");
+    if (!rail) { panel.remove(); return; }
+    // Ancre verticale : la carte du courant si présente, sinon le rail lui-même.
+    const anchor = root.querySelector(".co-current-inline") ?? rail;
+
+    const rootRect = root.getBoundingClientRect();
+    const railRect = rail.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const gap = 4;
+
+    // Horizontale : accolé au bord droit du rail.
+    panel.style.left = `${railRect.right - rootRect.left + gap}px`;
+
+    // Verticale : haut de la carte par défaut ; si ça déborde sous le bas du rail
+    // ET que le panneau tient dans le rail, on aligne son bas sur celui du rail.
+    const panelH = panel.offsetHeight;
+    let topVp = anchorRect.top;
+    if (panelH <= railRect.height && topVp + panelH > railRect.bottom) {
+      topVp = railRect.bottom - panelH;
+    }
+    panel.style.top = `${topVp - rootRect.top}px`;
   }
 
   /** Carte du combattant courant : grand portrait + nom + stats (remplace le spotlight). */
@@ -408,10 +486,6 @@ export class CombatOverlay extends FloatingBar {
       img.src = this.imgFor(c);
       img.alt = c.name;
       p.appendChild(img);
-      const lbl = document.createElement("span");
-      lbl.className = "co-portrait-label";
-      lbl.textContent = "À son tour";
-      p.appendChild(lbl);
       card.appendChild(p);
     }
 

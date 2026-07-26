@@ -269,6 +269,13 @@
   display: grid; place-items: center; line-height: 1;
 }
 
+/* Variante « courant en place » : la carte du courant est insérée DANS le rail.
+   Elle s'élargit à la largeur du portrait ; les autres vignettes restent centrées. */
+#combat-overlay .co-rail .co-current-inline {
+  width: var(--co-spot); margin: 2px auto; padding: 5px;
+}
+#combat-overlay .co-rail .co-current-inline .co-portrait { height: var(--co-spot); }
+
 /* ── Panneau de détail (courant + cible) à côté du rail ────────────────────── */
 #combat-overlay .co-detail {
   display: flex; flex-direction: column; gap: 6px;
@@ -353,6 +360,17 @@
 }
 #combat-overlay input.co-hp-edit:focus { border-color: #ff8c8c; outline: none; background: rgba(0, 0, 0, 0.7); }
 #combat-overlay input.co-hp-edit::placeholder { color: #a88; font-weight: 400; font-size: 11px; }
+
+/* Panneau cible FLOTTANT (mode « courant en place ») : hors flux, ancré au root
+   (position: fixed), donc non clippé par le rail. Fond opaque propre pour la
+   lisibilité au-dessus de la carte (la colonne .co-detail ne l'englobe plus). */
+#combat-overlay .co-targets-float {
+  position: absolute; z-index: 6; width: var(--co-spot);
+  pointer-events: auto;
+  background: rgba(14, 16, 22, 0.92);
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
 
 /* ── Champ d'initiative (vue setup) ────────────────────────────────────────── */
 #combat-overlay .co-init {
