@@ -70,6 +70,18 @@ export function registerSettings() {
     });
   }
 
+  // ── Ancrage commun à toutes les barres ──────────────────────────────────────
+  game.settings.register(MODULE_ID, "dockMargin", {
+    name: "Barres · Marge d'ancrage à l'écran (px)",
+    hint: "Écart entre une barre ancrée et le bord de l'écran. 0 = collée au bord.",
+    scope: "client", config: true, type: Number, default: 8,
+    onChange: () => {
+      SpellTemplateBar.instance?.applyDock();
+      CombatOverlay.instance?.applyDock();
+      TokenActionBar.instance?.applyDock();
+    },
+  });
+
   // ── Barre de gabarits ──────────────────────────────────────────────────────
   game.settings.register(MODULE_ID, "templateButtonSize", {
     name: "Gabarits · Taille des boutons (px)",

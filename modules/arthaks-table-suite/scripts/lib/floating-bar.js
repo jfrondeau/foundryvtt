@@ -26,12 +26,17 @@ export class FloatingBar {
   get posKey() { return `${MODULE_ID}.${this.key}.pos.${game.user.id}`; }
   get collapsedKey() { return `${MODULE_ID}.${this.key}.collapsed.${game.user.id}`; }
 
-  /** Positionne la barre en coordonnées absolues, contrainte dans la fenêtre. */
-  setPos(left, top) {
+  /**
+   * Positionne la barre en coordonnées absolues, contrainte dans la fenêtre.
+   * `edge` = inset minimal autorisé par rapport au bord (défaut 4px pour les
+   * barres libres, afin de garder la poignée saisissable). L'ancrage passe sa
+   * propre marge (0 = collée au bord).
+   */
+  setPos(left, top, edge = 4) {
     const bw = this.el.offsetWidth  || 200;
     const bh = this.el.offsetHeight || 40;
-    left = Math.clamp(left, 4, window.innerWidth  - bw - 4);
-    top  = Math.clamp(top,  4, window.innerHeight - bh - 4);
+    left = Math.clamp(left, edge, window.innerWidth  - bw - edge);
+    top  = Math.clamp(top,  edge, window.innerHeight - bh - edge);
     this.el.style.left = `${Math.round(left)}px`;
     this.el.style.top  = `${Math.round(top)}px`;
     this.el.style.right = this.el.style.bottom = "auto";
@@ -161,7 +166,9 @@ export class FloatingBar {
 
     if (!docked) return this.applyPosition();
 
-    const m = 8;
+    // Marge à l'écran configurable (0 = collée au bord).
+    const rawMargin = game.settings.get(MODULE_ID, "dockMargin");
+    const m = Number.isFinite(rawMargin) ? rawMargin : 8;
     const bw = this.el.offsetWidth, bh = this.el.offsetHeight;
     const W = window.innerWidth, H = window.innerHeight;
     const [edge, align] = dock.split("-");
@@ -179,7 +186,8 @@ export class FloatingBar {
       left = edge === "left" ? m : W - bw - m;
       top = align === "top" ? m : align === "bottom" ? H - bh - m : (H - bh) / 2;
     }
-    this.setPos(left, top);
+    // Passe la marge d'ancrage comme borne de clamp : m = 0 → collée au bord.
+    this.setPos(left, top, m);
   }
 
   /**
