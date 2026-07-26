@@ -30,7 +30,7 @@
  */
 
 import { MODULE_ID } from "../const.js";
-import { makeNotify, openModuleSettings } from "../lib/common.js";
+import { makeNotify } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
 
 const notify = makeNotify("Combat");
@@ -280,9 +280,6 @@ export class CombatOverlay extends FloatingBar {
       edit.classList.toggle("co-active", editing);
       header.appendChild(edit);
     }
-
-    // Accès rapide aux réglages du module (utile joueur, HUD masqué).
-    header.appendChild(this.makeBtn("fas fa-gear", "Réglages du module", () => openModuleSettings()));
 
     // Toggle minimiser (toujours à droite).
     const toggle = document.createElement("div");

@@ -26,7 +26,7 @@
  */
 
 import { MODULE_ID } from "../const.js";
-import { makeNotify, openModuleSettings } from "../lib/common.js";
+import { makeNotify } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
 
 const BAR_ID = "selected-token-actions";
@@ -374,14 +374,6 @@ export class TokenActionBar extends FloatingBar {
       wrap.appendChild(empty);
     }
     this.bar.appendChild(wrap);
-
-    // Accès rapide aux réglages du module (utile joueur, HUD masqué).
-    const gear = document.createElement("div");
-    gear.className = "ab-toggle ab-gear";
-    gear.dataset.tooltip = "Réglages du module";
-    gear.innerHTML = '<i class="fas fa-gear"></i>';
-    gear.addEventListener("click", () => openModuleSettings());
-    this.bar.appendChild(gear);
 
     // Toggle minimiser / ré-étendre (toujours visible).
     const collapsed = localStorage.getItem(this.collapsedKey) === "1";

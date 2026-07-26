@@ -24,7 +24,7 @@
  */
 
 import { MODULE_ID } from "../const.js";
-import { makeNotify, openModuleSettings } from "../lib/common.js";
+import { makeNotify } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
 
 const NS = MODULE_ID;                     // namespace des flags de Region (owner)
@@ -114,15 +114,6 @@ export class SpellTemplateBar extends FloatingBar {
     trash.appendChild(trashIcon);
     trash.addEventListener("click", (ev) => { ev.preventDefault(); this.clearMine(); });
     bar.appendChild(trash);
-
-    // Accès rapide aux réglages du module (utile joueur, HUD masqué : le menu de
-    // configuration n'est plus accessible autrement).
-    const gear = document.createElement("div");
-    gear.className = "tb-toggle tb-gear";
-    gear.dataset.tooltip = "Réglages du module";
-    gear.innerHTML = '<i class="fas fa-gear"></i>';
-    gear.addEventListener("click", () => openModuleSettings());
-    bar.appendChild(gear);
 
     // Toggle minimiser / ré-étendre (toujours visible).
     const toggle = document.createElement("div");
