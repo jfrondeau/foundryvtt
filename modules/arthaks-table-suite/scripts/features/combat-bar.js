@@ -434,10 +434,11 @@ export class CombatOverlay extends FloatingBar {
 
   /**
    * Positionne le panneau cible flottant (mode « en place ») à droite du rail,
-   * aligné sur le HAUT de la carte du courant ; bascule sur le BAS de cette carte
-   * si l'alignement haut ferait déborder le panneau sous le bas du viewport.
-   * Positionnement absolu relatif au root (position: fixed), donc hors du clip
-   * du rail (overflow) et insensible au glissement horizontal de la barre.
+   * aligné sur le HAUT de la carte du courant. S'il déborde sous le bas STRICT du
+   * rail, on le remonte pour aligner son bas sur le bas du rail. Exception : si le
+   * panneau est plus haut que le rail, on garde l'alignement haut et on le laisse
+   * dépasser en bas. Positionnement absolu relatif au root (position: fixed), donc
+   * hors du clip du rail (overflow) et insensible au glissement horizontal.
    */
   positionFloatingTargets() {
     const root = this.root;
@@ -452,16 +453,17 @@ export class CombatOverlay extends FloatingBar {
     const railRect = rail.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
     const gap = 4;
-    const margin = 8;
 
     // Horizontale : accolé au bord droit du rail.
     panel.style.left = `${railRect.right - rootRect.left + gap}px`;
 
-    // Verticale : haut par défaut, bas si débordement sous le viewport.
+    // Verticale : haut de la carte par défaut ; si ça déborde sous le bas du rail
+    // ET que le panneau tient dans le rail, on aligne son bas sur celui du rail.
     const panelH = panel.offsetHeight;
     let topVp = anchorRect.top;
-    if (topVp + panelH > window.innerHeight - margin) topVp = anchorRect.bottom - panelH;
-    if (topVp < margin) topVp = margin; // ne pas sortir par le haut
+    if (panelH <= railRect.height && topVp + panelH > railRect.bottom) {
+      topVp = railRect.bottom - panelH;
+    }
     panel.style.top = `${topVp - rootRect.top}px`;
   }
 
