@@ -136,7 +136,7 @@ export class SpellTemplateBar extends FloatingBar {
     bar.appendChild(toggle);
 
     this.applyButtonSize();
-    this.applyPosition();
+    this.applyDock();
 
     // État minimisé mémorisé.
     if (localStorage.getItem(this.collapsedKey) === "1") this.setCollapsed(true);
@@ -176,6 +176,9 @@ export class SpellTemplateBar extends FloatingBar {
     const size = Number(game.settings.get(MODULE_ID, "templateButtonSize")) || 40;
     this.bar?.style.setProperty("--tb-btn", `${size}px`);
   }
+
+  // Ancrage aux bords : hérité de FloatingBar. Défaut « free » (position libre).
+  get dockSettingKey() { return "templateDock"; }
 
   // ── Minimiser (skeleton dans FloatingBar) ──────────────────────────────────
   get collapsedClass() { return "stb-collapsed"; }

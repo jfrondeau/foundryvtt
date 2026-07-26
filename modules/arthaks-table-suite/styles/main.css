@@ -4,6 +4,16 @@
    #selected-token-actions (ab-), body.ahh-* — aucune collision de sélecteurs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Zone de dépôt d'ancrage (« layout ondrag »), commune aux 3 barres ────────── */
+/* Bande surlignée le long du bord visé pendant qu'on glisse une barre par sa
+   poignée ; masquée hors glisser. Ne capte pas les clics. */
+.fb-dropzone {
+  position: fixed; z-index: 69; display: none; pointer-events: none;
+  background: rgba(255, 100, 0, 0.18);
+  border: 2px dashed rgba(255, 140, 60, 0.85);
+  box-shadow: inset 0 0 24px rgba(255, 122, 26, 0.25);
+}
+
 /* ╔═══ BARRE DE GABARITS ══════════════════════════════════════════════════╗ */
 /* ── Barre de gabarits ──────────────────────────────────────────────────────── */
 #spell-template-bar {
@@ -64,6 +74,11 @@
 /* ── État minimisé : ne reste que la poignée + le toggle ─────────────────────── */
 #spell-template-bar.stb-collapsed { gap: 2px; padding: 3px 5px; }
 #spell-template-bar.stb-collapsed .tb-collapsible { display: none; }
+
+/* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
+#spell-template-bar.fb-vertical { flex-direction: column; align-items: center; }
+#spell-template-bar.fb-vertical .tb-label { margin-right: 0; }
+#spell-template-bar.fb-vertical .tb-sep { width: auto; height: 1px; align-self: stretch; margin: 2px; }
 
 /* ╔═══ SUIVI DE COMBAT ════════════════════════════════════════════════════╗ */
 /* ── Overlay de combat — layout « Rail » ─────────────────────────────────────── */
@@ -205,6 +220,21 @@
   background: rgba(255, 122, 26, 0.26); border-left-color: var(--co-current);
   box-shadow: inset 0 0 0 1px rgba(255, 140, 60, 0.5);
 }
+
+/* ── Orientation horizontale (ancrage haut / bas) : combattants côte à côte ────── */
+/* Le rail (vue combat) et la liste (vue setup) passent en rangée, avec défilement
+   horizontal. Les colonnes empilées deviennent des bandes larges. */
+#combat-overlay.fb-horizontal .co-rail {
+  flex-direction: row; align-items: stretch;
+  max-height: none; max-width: 88vw; overflow-x: auto; overflow-y: visible;
+}
+#combat-overlay.fb-horizontal .co-editlist { min-width: 0; max-width: 88vw; max-height: none; }
+#combat-overlay.fb-horizontal .co-erows { flex-direction: row; overflow-x: auto; overflow-y: visible; }
+#combat-overlay.fb-horizontal .co-erow { border-left: none; border-top: 3px solid transparent; }
+#combat-overlay.fb-horizontal .co-erow.co-pc  { border-top-color: var(--co-pc); }
+#combat-overlay.fb-horizontal .co-erow.co-npc { border-top-color: var(--co-npc); }
+#combat-overlay.fb-horizontal .co-erow.co-current { border-top-color: var(--co-current); }
+#combat-overlay.fb-horizontal .co-ename { max-width: 90px; }
 
 /* Vignette (rail + liste setup) : anneau PV + image/initiales */
 #combat-overlay .co-thumb { position: relative; width: var(--co-row); height: var(--co-row); border-radius: 50%; }
@@ -449,16 +479,16 @@
 #selected-token-actions.ab-collapsed .ab-collapsible { display: none; }
 
 /* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
-#selected-token-actions.ab-vertical { flex-direction: column; align-items: center; }
-#selected-token-actions.ab-vertical .ab-label { margin-right: 0; }
-#selected-token-actions.ab-vertical .ab-items {
+#selected-token-actions.fb-vertical { flex-direction: column; align-items: center; }
+#selected-token-actions.fb-vertical .ab-label { margin-right: 0; }
+#selected-token-actions.fb-vertical .ab-items {
   flex-direction: column; align-items: center;
   overflow-x: hidden; overflow-y: auto; max-height: 74vh;
 }
 /* Chaque section empile ses boutons en colonne → une seule colonne d'icônes. */
-#selected-token-actions.ab-vertical .ab-row { flex-direction: column; }
-#selected-token-actions.ab-vertical .ab-items::-webkit-scrollbar { width: 6px; height: auto; }
-#selected-token-actions.ab-vertical .ab-section + .ab-section {
+#selected-token-actions.fb-vertical .ab-row { flex-direction: column; }
+#selected-token-actions.fb-vertical .ab-items::-webkit-scrollbar { width: 6px; height: auto; }
+#selected-token-actions.fb-vertical .ab-section + .ab-section {
   border-left: none; padding-left: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 6px;
 }

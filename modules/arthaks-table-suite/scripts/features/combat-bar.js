@@ -176,7 +176,7 @@ export class CombatOverlay extends FloatingBar {
     document.body.appendChild(root);
 
     this.applySizes();
-    this.applyPosition();
+    this.applyDock();
     if (localStorage.getItem(this.collapsedKey) === "1") root.classList.add("co-collapsed");
   }
 
@@ -226,6 +226,9 @@ export class CombatOverlay extends FloatingBar {
     }
 
     root.appendChild(body);
+
+    // L'innerHTML vient d'être reconstruit (dimensions modifiées) : ré-ancrer.
+    this.applyDock();
   }
 
   /**
@@ -903,4 +906,7 @@ export class CombatOverlay extends FloatingBar {
 
   // Position : héritée de FloatingBar ; seul le défaut change (coin haut-gauche).
   defaultPosition() { return { left: 10, top: 80 }; }
+
+  // Ancrage aux bords : hérité de FloatingBar. Défaut « free » (position libre).
+  get dockSettingKey() { return "combatDock"; }
 }

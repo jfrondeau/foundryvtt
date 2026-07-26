@@ -19,6 +19,46 @@ function toggleFeature(cls, on) {
   else cls.instance?.destroy();
 }
 
+/**
+ * Choix d'ancrage communs aux barres flottantes : « Libre » (glisser-déposer) ou
+ * un bord de l'écran × un alignement. Gauche/droite ancrent en vertical, haut/bas
+ * en horizontal (voir FloatingBar.applyDock).
+ */
+const DOCK_CHOICES = {
+  free: "Libre (glisser-déposer)",
+  "bottom-left": "Bas · gauche",
+  "bottom-center": "Bas · centre",
+  "bottom-right": "Bas · droite",
+  "top-left": "Haut · gauche",
+  "top-center": "Haut · centre",
+  "top-right": "Haut · droite",
+  "left-top": "Gauche · haut",
+  "left-center": "Gauche · centre",
+  "left-bottom": "Gauche · bas",
+  "right-top": "Droite · haut",
+  "right-center": "Droite · centre",
+  "right-bottom": "Droite · bas",
+};
+
+/**
+ * Enregistre un réglage d'ancrage pour une barre.
+ * @param {string} key      Clé du réglage (déclarée par la barre via `dockSettingKey`).
+ * @param {string} name     Libellé affiché.
+ * @param {string} def      Ancrage par défaut.
+ * @param {() => void} onChange Rappel appliquant l'ancrage sur l'instance vivante.
+ */
+function registerDock(key, name, def, onChange) {
+  game.settings.register(MODULE_ID, key, {
+    name,
+    hint: "Ancre la barre sur un bord de l'écran (gauche/droite = vertical, haut/bas = horizontal). " +
+          "« Libre » = glisser-déposer, position mémorisée. Astuce : glisser la barre près d'un bord l'y ancre aussi.",
+    scope: "client", config: true, type: String,
+    choices: DOCK_CHOICES,
+    default: def,
+    onChange,
+  });
+}
+
 /** Enregistre tous les réglages de la suite (appelé au hook « init »). */
 export function registerSettings() {
   // ── Activation des fonctionnalités (une entrée par barre du registre) ───────
@@ -38,9 +78,15 @@ export function registerSettings() {
     onChange: () => SpellTemplateBar.instance?.applyButtonSize(),
   });
 
+  registerDock("templateDock", "Gabarits · Ancrage de la barre", "free",
+    () => SpellTemplateBar.instance?.applyDock());
+
   // ── Suivi de combat ────────────────────────────────────────────────────────
   const syncCombat = () => CombatOverlay.instance?.sync();
   const sizeCombat = () => CombatOverlay.instance?.applySizes();
+
+  registerDock("combatDock", "Combat · Ancrage de la barre", "free",
+    () => CombatOverlay.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "imageMode", {
     name: "Combat · Image des combattants",
@@ -143,28 +189,8 @@ export function registerSettings() {
     onChange: reRenderToken,
   });
 
-  game.settings.register(MODULE_ID, "dockPosition", {
-    name: "Token · Ancrage de la barre",
-    hint: "Ancre la barre sur un bord de l'écran (la poignée de déplacement est alors masquée). « Libre » = glisser-déposer, position mémorisée.",
-    scope: "client", config: true, type: String,
-    choices: {
-      free: "Libre (glisser-déposer)",
-      "bottom-left": "Bas · gauche",
-      "bottom-center": "Bas · centre",
-      "bottom-right": "Bas · droite",
-      "top-left": "Haut · gauche",
-      "top-center": "Haut · centre",
-      "top-right": "Haut · droite",
-      "left-top": "Gauche · haut",
-      "left-center": "Gauche · centre",
-      "left-bottom": "Gauche · bas",
-      "right-top": "Droite · haut",
-      "right-center": "Droite · centre",
-      "right-bottom": "Droite · bas",
-    },
-    default: "bottom-center",
-    onChange: reRenderToken,
-  });
+  registerDock("dockPosition", "Token · Ancrage de la barre", "bottom-center",
+    () => TokenActionBar.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "dedupeByName", {
     name: "Token · Masquer les doublons",
