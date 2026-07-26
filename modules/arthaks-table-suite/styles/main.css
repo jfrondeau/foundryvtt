@@ -239,6 +239,13 @@
   display: grid; place-items: center; line-height: 1;
 }
 
+/* Variante « courant en place » : la carte du courant est insérée DANS le rail.
+   Elle s'élargit à la largeur du portrait ; les autres vignettes restent centrées. */
+#combat-overlay .co-rail .co-current-inline {
+  width: var(--co-spot); margin: 2px auto; padding: 5px;
+}
+#combat-overlay .co-rail .co-current-inline .co-portrait { height: var(--co-spot); }
+
 /* ── Panneau de détail (courant + cible) à côté du rail ────────────────────── */
 #combat-overlay .co-detail {
   display: flex; flex-direction: column; gap: 6px;

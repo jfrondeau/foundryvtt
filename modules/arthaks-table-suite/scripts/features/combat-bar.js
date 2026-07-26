@@ -350,6 +350,14 @@ export class CombatOverlay extends FloatingBar {
     const showInit = !game.settings.get(MODULE_ID, "hideInitInCombat");
 
     for (const c of visible) {
+      // Variante « courant en place » : le combattant à son tour s'agrandit
+      // directement dans la liste (portrait + nom + stats), au lieu d'une carte
+      // dupliquée à droite. La section de droite ne montre plus que les cibles.
+      if (c.id === markerId) {
+        rail.appendChild(this.renderRailCurrentCard(c));
+        continue;
+      }
+
       const item = document.createElement("div");
       item.className = "co-thumbwrap";
       item.classList.toggle("co-current", c.id === markerId);
@@ -376,13 +384,23 @@ export class CombatOverlay extends FloatingBar {
     return rail;
   }
 
-  /** Panneau de détail à côté du rail : carte du courant + panneau cible. */
+  /**
+   * Carte du courant insérée EN PLACE dans le rail (variante) : réutilise la carte
+   * du courant, taggée pour la mettre en forme au sein de la liste.
+   */
+  renderRailCurrentCard(c) {
+    const card = this.renderCurrentCard(c);
+    card.classList.add("co-current-inline");
+    return card;
+  }
+
+  /**
+   * Panneau de détail à côté du rail. Variante « courant en place » : le courant
+   * est désormais rendu dans le rail, donc ce panneau ne contient que les cibles.
+   */
   renderDetail(visible, markerId) {
     const detail = document.createElement("div");
     detail.className = "co-detail";
-
-    const featured = markerId ? visible.find(c => c.id === markerId) : null;
-    if (featured) detail.appendChild(this.renderCurrentCard(featured));
 
     const victims = this.resolveVictims();
     if (victims.length) detail.appendChild(this.renderTargetPanel(victims));
