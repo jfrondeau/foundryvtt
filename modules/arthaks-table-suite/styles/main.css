@@ -511,3 +511,36 @@ body.ahh-hide-hud.ahh-show-chat #sidebar-tabs menu > li:not(:has(button[data-tab
 body.ahh-hide-hud.ahh-show-chat #sidebar-content #chat {
   background: transparent !important;
 }
+
+/* ── Panneau de masquage granulaire (vue MJ) : cases à cocher groupées ───────── */
+.ahh-gm-hide-config .ahh-gm-hide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem;
+}
+
+.ahh-gm-hide-config .ahh-gm-hide-body > .notes {
+  margin: 0;
+}
+
+.ahh-gm-hide-config fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--color-border-light-tertiary, #7a7971);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.ahh-gm-hide-config .ahh-gm-hide-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.ahh-gm-hide-config .ahh-gm-hide-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
+}

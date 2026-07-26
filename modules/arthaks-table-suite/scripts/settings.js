@@ -11,7 +11,7 @@ import { BARS } from "./features/registry.js";
 import { SpellTemplateBar } from "./features/template-bar.js";
 import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
-import { HideHud } from "./features/hide-hud.js";
+import { HideHud, GmHideConfig } from "./features/hide-hud.js";
 
 /** Démarre ou détruit une barre selon l'état de son réglage d'activation. */
 function toggleFeature(cls, on) {
@@ -194,6 +194,23 @@ export function registerSettings() {
     hint: "Conserver le journal de chat (chat-scroll) visible pour les joueurs quand l'interface est masquée. Le champ de saisie (chat-form) reste masqué.",
     scope: "world", config: true, type: Boolean, default: true,
     onChange: () => HideHud.apply(),
+  });
+
+  // ── Masquage granulaire de la vue MJ (scope client, par écran) ──────────────
+  // État { [key]: true } des éléments masqués. Non affiché dans la liste : édité
+  // via le panneau dédié ci-dessous ; l'onChange ré-applique la feuille de style.
+  game.settings.register(MODULE_ID, "gmHidden", {
+    scope: "client", config: false, type: Object, default: {},
+    onChange: () => HideHud.applyGmHide(),
+  });
+
+  game.settings.registerMenu(MODULE_ID, "gmHideMenu", {
+    name: "Masquage MJ · Éléments masqués",
+    label: "Configurer le masquage (MJ)",
+    hint: "Choisir individuellement les éléments à retirer de VOTRE écran de MJ (barre de macros, panneau joueurs, saisie du chat, onglets de la sidebar…). N'affecte que votre client.",
+    icon: "fa-solid fa-eye-slash",
+    type: GmHideConfig,
+    restricted: true,
   });
 }
 
