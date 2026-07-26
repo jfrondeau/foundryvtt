@@ -287,7 +287,6 @@ export class TokenActionBar extends FloatingBar {
       includeFeatures:  game.settings.get(MODULE_ID, "includeFeatures"),
       includeSpells:    game.settings.get(MODULE_ID, "includeSpells"),
       showGroupLabels:  game.settings.get(MODULE_ID, "showGroupLabels"),
-      dockPosition:     game.settings.get(MODULE_ID, "dockPosition") || "bottom-center",
       onlyEquippedWeapons: game.settings.get(MODULE_ID, "onlyEquippedWeapons"),
       dedupeByName: game.settings.get(MODULE_ID, "dedupeByName"),
       alwaysShowFeatureNames: names,
@@ -324,9 +323,8 @@ export class TokenActionBar extends FloatingBar {
     this._activeActorId = actor.id;
     this.bar.style.display = "flex";
 
-    // Poignée de déplacement (masquée quand la barre est ancrée).
-    this.handle = this.makeHandle("ab-handle");
-    this.bar.appendChild(this.handle);
+    // Poignée de déplacement (toujours visible, ancrée ou libre).
+    this.bar.appendChild(this.makeHandle("ab-handle"));
 
     // Libellé (repliable).
     const label = document.createElement("div");
@@ -396,12 +394,8 @@ export class TokenActionBar extends FloatingBar {
 
     this.bar.classList.toggle("ab-collapsed", collapsed);
 
-    // Orientation selon l'ancrage.
-    const dock = CFG.dockPosition;
-    this.bar.classList.toggle("ab-vertical", dock.startsWith("left") || dock.startsWith("right"));
-
-    // Placement une fois le contenu construit (dimensions connues).
-    this.applyDockOrFree();
+    // Placement + orientation une fois le contenu construit (dimensions connues).
+    this.applyDock();
   }
 
   makeButton(item, cssClass, actor) {
@@ -443,45 +437,9 @@ export class TokenActionBar extends FloatingBar {
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
   }
 
-  // ── Position ─────────────────────────────────────────────────────────────
-  // Placement spécifique : ancrage aux bords OU libre. `reflow` (appelé par la base
-  // au resize et à la minimisation) délègue ici ; applyPosition reste hérité.
-
-  // Ancre la barre sur un bord selon le réglage, ou la laisse libre (glisser).
-  applyDockOrFree() {
-    const dock = CFG.dockPosition || "bottom-center";
-    if (dock === "free") {
-      if (this.handle) this.handle.style.display = "";
-      return this.applyPosition();
-    }
-    if (this.handle) this.handle.style.display = "none";
-
-    const m = 8;
-    const bw = this.bar.offsetWidth, bh = this.bar.offsetHeight;
-    const W = window.innerWidth, H = window.innerHeight;
-    const [edge, align] = dock.split("-");
-    let left, top;
-
-    if (edge === "bottom" || edge === "top") {
-      top = edge === "top" ? m : H - bh - m;
-      left = align === "left" ? m : align === "right" ? W - bw - m : (W - bw) / 2;
-      // Bas-centre : se caler au-dessus de la hotbar plutôt que de la recouvrir.
-      if (edge === "bottom" && align === "center") {
-        const hb = document.getElementById("hotbar")?.getBoundingClientRect();
-        if (hb && hb.width) top = hb.top - bh - m;
-      }
-    } else { // gauche / droite : barre verticale
-      left = edge === "left" ? m : W - bw - m;
-      top = align === "top" ? m : align === "bottom" ? H - bh - m : (H - bh) / 2;
-    }
-    this.setPos(left, top);
-  }
-
-  // reflow : override — respecte l'ancrage aux bords (sinon re-clampe la position courante).
-  reflow() {
-    if (!this.bar || this.bar.style.display === "none") return;
-    if ((CFG.dockPosition || "bottom-center") !== "free") return this.applyDockOrFree();
-    const r = this.bar.getBoundingClientRect();
-    this.setPos(r.left, r.top);
-  }
+  // ── Position / ancrage ─────────────────────────────────────────────────────
+  // Ancrage aux bords, orientation et reflow : hérités de FloatingBar. La barre
+  // déclare seulement sa clé de réglage et son ancrage par défaut.
+  get dockSettingKey() { return "dockPosition"; }
+  get defaultDock() { return "bottom-center"; }
 }
