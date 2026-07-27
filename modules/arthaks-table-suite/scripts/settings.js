@@ -140,6 +140,9 @@ export function registerSettings() {
     });
     const meta = BAR_MENUS.get(cls);
     if (meta) {
+      // Rend le panneau accessible depuis la barre elle-même (clic droit sur la
+      // poignée → FloatingBar.openSettings), seul accès quand le HUD est masqué.
+      cls.SettingsPanel = meta.panel;
       game.settings.registerMenu(MODULE_ID, meta.menuKey, {
         name: meta.label,
         label: meta.label,

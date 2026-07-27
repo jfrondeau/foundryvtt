@@ -51,10 +51,15 @@ export class SettingsPanel extends foundry.applications.api.ApplicationV2 {
 
     group.append(label, fields);
 
+    // Réglage à portée « monde » : seul le MJ peut l'écrire. Côté joueur on désactive
+    // le contrôle (sinon game.settings.set lève une erreur) et on l'indique.
+    const gmOnly = cfg.scope === "world" && !game.user.isGM;
+    if (gmOnly) fields.querySelectorAll("input, select, textarea").forEach((el) => { el.disabled = true; });
+
     if (cfg.hint) {
       const notes = document.createElement("p");
       notes.className = "notes";
-      notes.textContent = cfg.hint;
+      notes.textContent = gmOnly ? `${cfg.hint} (réglage réservé au MJ)` : cfg.hint;
       group.appendChild(notes);
     }
     return group;

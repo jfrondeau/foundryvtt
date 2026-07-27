@@ -270,7 +270,7 @@ export class CombatOverlay extends FloatingBar {
     const header = document.createElement("div");
     header.className = "co-header";
 
-    header.appendChild(this.makeHandle("co-handle", "Glisser pour déplacer"));
+    header.appendChild(this.makeHandle("co-handle", "Glisser pour déplacer · clic droit : réglages"));
 
     const round = document.createElement("div");
     round.className = "co-round";

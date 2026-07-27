@@ -139,6 +139,7 @@ export class FloatingBar {
    */
   initDrag(handle) {
     handle.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return; // seul le bouton gauche déplace (le droit ouvre les réglages)
       ev.preventDefault();
       const r = this.el.getBoundingClientRect();
       const offX = ev.clientX - r.left;
@@ -275,13 +276,36 @@ export class FloatingBar {
     return d;
   }
 
-  /** Crée la poignée de déplacement (icône grip), déjà rendue déplaçable via initDrag. */
-  makeHandle(className, tooltip = "Glisser pour déplacer la barre") {
+  /**
+   * Crée la poignée de déplacement (icône grip) : glisser (bouton gauche) pour
+   * déplacer/ancrer, clic DROIT pour ouvrir les réglages de la barre. Ce clic droit
+   * est le seul accès aux réglages quand le HUD joueur est masqué (les panneaux par
+   * barre y sont ouverts programmatiquement, contournant le menu natif restreint).
+   */
+  makeHandle(className, tooltip = "Glisser pour déplacer · clic droit : réglages") {
     const handle = document.createElement("i");
     handle.className = `fas fa-grip-vertical ${className}`;
     handle.dataset.tooltip = tooltip;
     this.initDrag(handle);
+    handle.addEventListener("contextmenu", (ev) => {
+      ev.preventDefault();
+      this.openSettings();
+    });
     return handle;
+  }
+
+  /**
+   * Ouvre le panneau de réglages de cette barre (défini par la sous-classe via la
+   * statique `SettingsPanel`, assignée à l'enregistrement des réglages). Réutilise
+   * une instance déjà ouverte plutôt que d'en empiler une nouvelle.
+   */
+  openSettings() {
+    const Panel = this.constructor.SettingsPanel;
+    if (!Panel) return;
+    const id = Panel.DEFAULT_OPTIONS?.id;
+    const existing = id ? foundry.applications?.instances?.get?.(id) : null;
+    if (existing) { existing.render(true); existing.bringToFront?.(); return; }
+    new Panel().render(true);
   }
 
   // ── Minimiser (état persisté par utilisateur) ───────────────────────────────
