@@ -170,16 +170,36 @@ export class FloatingBar {
       const offX = ev.clientX - r.left;
       const offY = ev.clientY - r.top;
       handle.setPointerCapture(ev.pointerId);
-      let candidate = null;
+      let candidate = null;  // bord visé
+      let magnet = null;     // barre voisine visée (empilement magnétique)
+      let engaged = null;    // bord « collant » engagé (hystérésis anti-bascule au coin)
       const onMove = (e) => {
         this.setPos(e.clientX - offX, e.clientY - offY); // suit le pointeur
-        candidate = this.dockSettingKey ? this.dragCandidate(e.clientX, e.clientY) : null;
-        // Aimant : recale la position le long du bord vers le centre de l'écran quand
-        // on en est proche (le seul point dur à viser à main levée).
-        if (candidate) {
-          const r = this.el.getBoundingClientRect();
-          const s = this.snapParallel(candidate, r.left, r.top);
-          if (s.left !== r.left || s.top !== r.top) this.setPos(s.left, s.top);
+        magnet = null;
+        candidate = null;
+        if (this.dockSettingKey) {
+          const nearEdge = this.dockCandidateAt(e.clientX, e.clientY); // bord d'écran sous le pointeur
+          const near = this._nearestDockedBar();                       // barre ancrée proche
+          const dockable = nearEdge !== null || near !== null;
+          if (engaged && dockable) {
+            // Bord COLLANT : une fois engagé, on NE change JAMAIS de bord en cours de glisser
+            // (ni par la hauteur au coin, ni par une barre voisine sur un autre bord).
+            candidate = engaged;
+          } else if (dockable) {
+            // (Ré)engagement depuis le centre : bord d'écran sous le pointeur, sinon celui
+            // de la barre proche.
+            candidate = engaged = nearEdge ?? near.getEdge();
+          } else {
+            candidate = engaged = null; // revenu au centre → libre
+          }
+          // Aimant de POSITION : n'adopter la position d'une barre que si elle est sur le
+          // bord ENGAGÉ (empilement sur le même bord). Jamais de changement de bord ici.
+          magnet = (candidate && near && near.getEdge() === candidate) ? near : null;
+          if (candidate && !magnet) {
+            const r = this.el.getBoundingClientRect();
+            const s = this.snapParallel(candidate, r.left, r.top);
+            if (s.left !== r.left || s.top !== r.top) this.setPos(s.left, s.top);
+          }
         }
         this.showDropzone(candidate);
       };
@@ -189,14 +209,14 @@ export class FloatingBar {
         handle.removeEventListener("pointerup", onUp);
         this.hideDropzone();
         if (candidate) {
-          // Position CONTINUE le long du bord = centre courant de la barre sur l'axe du
-          // bord (fraction, déjà aimanté au centre par onMove). `seq` = maintenant →
-          // nouvelle venue, s'empile au-dessus des barres déjà présentes sur ce bord.
-          const rr = this.el.getBoundingClientRect();
+          // Position parallèle CONTINUE = fraction du coin avant de la barre. Si on rejoint
+          // une barre aimantée, on ADOPTE sa position parallèle → chevauchement → empilement
+          // automatique juste à côté. `seq` = maintenant → nouvelle venue (s'empile au-delà).
           const horizontalEdge = candidate === "top" || candidate === "bottom";
           const span = horizontalEdge ? this.usableRight() : window.innerHeight;
-          const center = horizontalEdge ? (rr.left + rr.width / 2) : (rr.top + rr.height / 2);
-          this.writeDockState({ pos: Math.clamp(center / span, 0, 1), seq: FloatingBar.nextSeq() });
+          const ref = magnet ? magnet.el.getBoundingClientRect() : this.el.getBoundingClientRect();
+          const start = horizontalEdge ? ref.left : ref.top;
+          this.writeDockState({ pos: Math.clamp(start / span, 0, 1), seq: FloatingBar.nextSeq() });
           this.setEdge(candidate);
         } else {
           // Lâchée au centre : mode libre, position courante mémorisée.
@@ -253,9 +273,17 @@ export class FloatingBar {
 
   readDockState() { try { return JSON.parse(localStorage.getItem(this.dockStateKey)) ?? {}; } catch { return {}; } }
   writeDockState(patch) { localStorage.setItem(this.dockStateKey, JSON.stringify({ ...this.readDockState(), ...patch })); }
-  /** Position du CENTRE de la barre le long du bord, en fraction [0..1] (défaut : centre). */
-  dockPos() { const p = this.readDockState().pos; return Number.isFinite(p) ? Math.clamp(p, 0, 1) : 0.5; }
-  /** Rang d'arrivée sur le bord : plus petit = arrivé avant = plus proche du bord (priorité). */
+  /**
+   * Coordonnée (px) du coin AVANT de la barre le long de l'axe parallèle au bord.
+   * Position CONTINUE mémorisée en fraction `pos` ; à défaut, centrée. On ancre ce coin
+   * (celui de la poignée), pas le centre : ainsi la poignée ne bouge pas quand la barre
+   * change de taille (repli). `parSpan`/`parSize` = étendue de l'axe parallèle et de la barre.
+   */
+  dockParStart(parSpan, parSize) {
+    const p = this.readDockState().pos;
+    return Number.isFinite(p) ? p * parSpan : (parSpan - parSize) / 2;
+  }
+  /** Rang d'arrivée : plus petit = arrivé avant = garde sa place (priorité d'empilement). */
   dockSeq() { const s = this.readDockState().seq; return Number.isFinite(s) ? s : 0; }
 
   /** Persiste le bord (source de vérité partagée avec le panneau). onChange → applyDock. */
@@ -280,26 +308,13 @@ export class FloatingBar {
   toggleOrientation() { this.setOrientation(this.getOrientation() === "h" ? "v" : "h"); }
 
   /**
-   * Étendue occupée par la barre sur l'axe PARALLÈLE au bord (celui le long duquel
-   * elle glisse), déduite de sa position mémorisée `dockPos` et de sa taille — jamais
-   * de sa position DOM courante (robuste pendant la cascade de reflow). Sert à décider
-   * si deux barres d'un même bord se chevauchent (donc s'empilent).
-   */
-  parallelExtent(edge) {
-    const horizontalEdge = edge === "top" || edge === "bottom";
-    const size = horizontalEdge ? this.el.offsetWidth : this.el.offsetHeight;
-    const span = horizontalEdge ? this.usableRight() : window.innerHeight;
-    const center = this.dockPos() * span;
-    return { start: center - size / 2, end: center + size / 2 };
-  }
-
-  /**
    * Applique l'ancrage courant : classes d'orientation + position.
    *  - « free » → position libre mémorisée (applyPosition).
-   *  - bord     → collée au bord, position CONTINUE le long du bord (`dockPos`), décalée
-   *               perpendiculairement par l'empilement (`stackOffset`).
-   * Orientation (docké) : `fb-vertical` si « v », sinon `fb-horizontal`. En mode libre,
-   * aucune classe d'orientation → mise en page CSS par défaut (rang).
+   *  - bord     → collée au bord ; position CONTINUE le long du bord (coin avant `pos`).
+   *               L'empilement n'agit QUE lorsque des barres se CHEVAUCHENT : soit
+   *               perpendiculairement au bord (`_perpStackOffset`), soit le long du bord
+   *               (`_resolveParallel`). Lâchée à un endroit libre → elle y reste.
+   * Orientation (docké) : `fb-vertical` si « v », sinon `fb-horizontal`.
    */
   applyDock() {
     if (!this.el || this.el.style.display === "none") return;
@@ -315,33 +330,43 @@ export class FloatingBar {
       this.applyPosition();
       return FloatingBar.reflowDocked();
     }
-
-    // Rang d'arrivée : posé au glisser, mais un ancrage via le panneau n'en pose pas —
-    // on en alloue un ici s'il manque, pour que la priorité d'empilement soit définie.
     if (!Number.isFinite(this.readDockState().seq)) this.writeDockState({ seq: FloatingBar.nextSeq() });
 
     const m = this.dockMargin();
     const bw = this.el.offsetWidth, bh = this.el.offsetHeight;
     const W = this.usableRight(), H = window.innerHeight;
     const horizontalEdge = edge === "top" || edge === "bottom";
-    const off = this.stackOffset(edge, m); // décalage perpendiculaire d'empilement
-    let left, top;
+    const thick = this.getOrientation() === "v" ? "x" : "y"; // axe d'épaisseur (empilement)
+    const perpAxis = horizontalEdge ? "y" : "x";             // axe perpendiculaire au bord
+    const parSpan = horizontalEdge ? W : H;
+    const parSize = horizontalEdge ? bw : bh;
 
+    // Position PARALLÈLE : continue (coin avant). Si l'empilement se fait LE LONG du bord
+    // (épaisseur = axe parallèle, ex. 2 barres horizontales à gauche), on résout les
+    // collisions ; sinon la valeur continue est conservée telle quelle.
+    let parStart = this.dockParStart(parSpan, parSize);
+    if (thick !== perpAxis) parStart = this._resolveParallel(edge, parStart, parSize);
+
+    // Position PERPENDICULAIRE : collée au bord (hotbar au bas). Si l'empilement se fait
+    // PERPENDICULAIREMENT au bord (épaisseur = perpendiculaire, ex. 2 barres en bas), on
+    // décale vers l'intérieur des barres antérieures qui la chevauchent.
+    let perpCoord;
     if (horizontalEdge) {
-      left = this.dockPos() * W - bw / 2;                 // position parallèle continue
-      top = edge === "top" ? m + off : H - bh - m - off;  // collée au bord + empilement
-      // Bas : remonter au-dessus de la hotbar SEULEMENT si la barre la chevauche.
+      perpCoord = edge === "top" ? m : H - bh - m;
       if (edge === "bottom") {
         const hb = document.getElementById("hotbar")?.getBoundingClientRect();
-        if (hb && hb.width && left < hb.right && (left + bw) > hb.left) {
-          top = hb.top - bh - m - off;
-        }
+        if (hb && hb.width && parStart < hb.right && (parStart + bw) > hb.left) perpCoord = hb.top - bh - m;
       }
-    } else { // bord gauche / droite
-      top = this.dockPos() * H - bh / 2;                  // position parallèle continue
-      left = edge === "left" ? m + off : W - bw - m - off;
+    } else {
+      perpCoord = edge === "left" ? m : W - bw - m;
+    }
+    if (thick === perpAxis) {
+      const off = this._perpStackOffset(edge, parStart, parSize);
+      perpCoord += (edge === "bottom" || edge === "right") ? -off : +off;
     }
 
+    const left = horizontalEdge ? parStart : perpCoord;
+    const top = horizontalEdge ? perpCoord : parStart;
     this.setPos(left, top, m); // clamp final dans la fenêtre (m = 0 → collée au bord)
     FloatingBar.reflowDocked();
   }
@@ -353,25 +378,49 @@ export class FloatingBar {
   }
 
   /**
-   * Décalage d'empilement (perpendiculaire au bord) : somme des tailles (+ marge) des
-   * AUTRES barres visibles ancrées au MÊME bord, arrivées AVANT (`seq` plus petit → plus
-   * proches du bord) ET qui chevauchent cette barre sur l'axe parallèle. Priorité
-   * POSITIONNELLE : celle déjà collée au bord garde sa place, la nouvelle s'empile au-dessus.
+   * Empilement PERPENDICULAIRE au bord : somme des tailles (+ marge) des barres du même
+   * bord/orientation arrivées AVANT (`seq` plus petit) qui CHEVAUCHENT cette barre sur
+   * l'axe parallèle (elles se superposeraient). Décale la barre vers l'intérieur. Sticky :
+   * recalculé à chaque reflow, donc la barre suit si la voisine change de taille.
    */
-  stackOffset(edge, m) {
+  _perpStackOffset(edge, parStart, parSize) {
     const horizontalEdge = edge === "top" || edge === "bottom";
-    const mySeq = this.dockSeq();
-    const mine = this.parallelExtent(edge);
+    const mySeq = this.dockSeq(), myEnd = parStart + parSize, m = this.dockMargin();
     let offset = 0;
     for (const other of FloatingBar.instances) {
       if (other === this || !other.el || other.el.style.display === "none") continue;
       if (!other.dockSettingKey || other.getEdge() !== edge) continue;
-      if (other.dockSeq() >= mySeq) continue; // ne repoussent que les barres arrivées avant
-      const oe = other.parallelExtent(edge);
-      if (!(mine.start < oe.end && oe.start < mine.end)) continue; // pas de chevauchement parallèle
-      offset += (horizontalEdge ? other.el.offsetHeight : other.el.offsetWidth) + m;
+      if (other.getOrientation() !== this.getOrientation()) continue;
+      if (other.dockSeq() >= mySeq) continue;
+      const o = other.el.getBoundingClientRect();
+      const [os, oe] = horizontalEdge ? [o.left, o.right] : [o.top, o.bottom]; // étendue parallèle
+      if (!(parStart < oe && os < myEnd)) continue; // pas de chevauchement parallèle → pas d'empilement
+      offset += (horizontalEdge ? o.height : o.width) + m;
     }
     return offset;
+  }
+
+  /**
+   * Résout les collisions LE LONG du bord (épaisseur = axe parallèle, ex. 2 barres
+   * horizontales sur le bord gauche) : part de la position continue voulue et repousse la
+   * barre juste après chaque barre antérieure (`seq` plus petit) qu'elle chevauche. Lâchée
+   * à un endroit libre → garde sa position ; posée sur une autre → se colle dessous. Sticky.
+   */
+  _resolveParallel(edge, desiredStart, size) {
+    const horizontalEdge = edge === "top" || edge === "bottom";
+    const mySeq = this.dockSeq(), m = this.dockMargin();
+    const par = (o) => (horizontalEdge ? [o.left, o.right] : [o.top, o.bottom]);
+    const earlier = [...FloatingBar.instances]
+      .filter((b) => b !== this && b.el && b.el.style.display !== "none" &&
+                     b.dockSettingKey && b.getEdge() === edge &&
+                     b.getOrientation() === this.getOrientation() && b.dockSeq() < mySeq)
+      .map((b) => par(b.el.getBoundingClientRect()))
+      .sort((a, b) => a[0] - b[0]);
+    let start = desiredStart;
+    for (const [os, oe] of earlier) {
+      if (start < oe + m && start + size > os - m) start = oe + m; // chevauche → juste dessous
+    }
+    return start;
   }
 
   /**
@@ -387,11 +436,13 @@ export class FloatingBar {
       const docked = [...FloatingBar.instances].filter(
         (b) => b.el && b.el.style.display !== "none" && b.dockSettingKey && b.getEdge() !== "free",
       );
-      // Pré-passe : garantir un rang d'arrivée à chaque barre ancrée AVANT tout calcul
-      // d'empilement (les ancrages via le panneau n'en posent pas, à la différence du glisser).
+      // Rang d'arrivée pour toutes (les ancrages via le panneau n'en posent pas), PUIS
+      // disposition dans l'ORDRE d'arrivée : les antérieures placées d'abord, les suivantes
+      // se résolvent contre leur position déjà calculée (empilement / collision).
       for (const bar of docked) {
         if (!Number.isFinite(bar.readDockState().seq)) bar.writeDockState({ seq: FloatingBar.nextSeq() });
       }
+      docked.sort((a, b) => a.dockSeq() - b.dockSeq());
       for (const bar of docked) bar.applyDock();
     } finally {
       FloatingBar._reflowing = false;
@@ -413,55 +464,42 @@ export class FloatingBar {
   }
 
   /**
-   * Bord visé pendant un glisser : d'abord un bord d'écran sous le pointeur ; à défaut,
-   * l'empilement MAGNÉTIQUE — si la barre traînée approche (< MAGNET px, avec
-   * chevauchement parallèle) une autre barre déjà ancrée, on vise SON bord pour venir
-   * s'empiler dessus, même loin du bord d'écran. Sinon null (mode libre).
-   */
-  dragCandidate(px, py) {
-    const edge = this.dockCandidateAt(px, py);
-    if (edge) return edge;
-    const near = this._nearestDockedBar();
-    return near ? near.getEdge() : null;
-  }
-
-  /**
-   * Barre ancrée la plus proche de la barre traînée (ou null) : même axe parallèle
-   * chevauchant, écart perpendiculaire < MAGNET px. Sert à l'empilement magnétique.
+   * Barre ancrée la plus proche de la barre traînée (ou null) : chevauchement sur l'axe
+   * parallèle à son bord, écart perpendiculaire < MAGNET px. Sert à l'empilement
+   * magnétique — s'approcher d'une barre ancrée fait venir s'empiler dessus, même loin
+   * du bord d'écran (on adopte ensuite son bord ET sa position parallèle → chevauchement).
    */
   _nearestDockedBar() {
-    const MAGNET = 40;
+    const MAGNET = 44;
     const r = this.el.getBoundingClientRect();
+    let best = null, bestDist = Infinity;
     for (const other of FloatingBar.instances) {
       if (other === this || !other.el || other.el.style.display === "none") continue;
       if (!other.dockSettingKey || other.getEdge() === "free") continue;
       const o = other.el.getBoundingClientRect();
-      const horizontalEdge = ["top", "bottom"].includes(other.getEdge());
-      const overlap = horizontalEdge
-        ? (r.left < o.right && o.left < r.right)   // chevauchement horizontal
-        : (r.top < o.bottom && o.top < r.bottom);  // chevauchement vertical
-      if (!overlap) continue;
-      const gap = horizontalEdge
-        ? Math.max(o.top - r.bottom, r.top - o.bottom)   // écart vertical (négatif si superposé)
-        : Math.max(o.left - r.right, r.left - o.right);  // écart horizontal
-      if (gap < MAGNET) return other;
+      // Distance entre rectangles (0 s'ils se chevauchent) : proximité par n'importe quel côté.
+      const dx = Math.max(o.left - r.right, r.left - o.right, 0);
+      const dy = Math.max(o.top - r.bottom, r.top - o.bottom, 0);
+      const dist = Math.hypot(dx, dy);
+      if (dist < MAGNET && dist < bestDist) { best = other; bestDist = dist; }
     }
-    return null;
+    return best;
   }
 
   /**
-   * Aimante la position le long du bord vers le CENTRE de l'écran (le point le plus dur
-   * à viser à la souris). Ne touche qu'à l'axe parallèle au bord ; renvoie { left, top }.
+   * Aimant léger vers le CENTRE de l'écran le long du bord (seul point dur à viser à main
+   * levée) ; sinon position CONTINUE (on reste où on lâche). Ne touche qu'à l'axe parallèle
+   * au bord ; renvoie { left, top }.
    */
   snapParallel(edge, left, top) {
-    const SNAP = 36;
+    const SNAP = 32;
     const bw = this.el.offsetWidth, bh = this.el.offsetHeight;
     if (edge === "top" || edge === "bottom") {
-      const span = this.usableRight();
-      if (Math.abs(left + bw / 2 - span / 2) < SNAP) left = span / 2 - bw / 2;
+      const c = (this.usableRight() - bw) / 2;
+      if (Math.abs(left - c) < SNAP) left = c;
     } else {
-      const H = window.innerHeight;
-      if (Math.abs(top + bh / 2 - H / 2) < SNAP) top = H / 2 - bh / 2;
+      const c = (window.innerHeight - bh) / 2;
+      if (Math.abs(top - c) < SNAP) top = c;
     }
     return { left, top };
   }
