@@ -316,6 +316,7 @@ export class TokenActionBar extends FloatingBar {
     if (!token) {
       this._activeActorId = null;
       this.bar.style.display = "none";
+      FloatingBar.reflowDocked(); // libère la place : les barres empilées au-dessus redescendent.
       return;
     }
 
@@ -323,8 +324,9 @@ export class TokenActionBar extends FloatingBar {
     this._activeActorId = actor.id;
     this.bar.style.display = "flex";
 
-    // Poignée de déplacement (toujours visible, ancrée ou libre).
+    // Poignée de déplacement (toujours visible, ancrée ou libre) + bouton ↻ (visible ancrée).
     this.bar.appendChild(this.makeHandle("ab-handle"));
+    this.bar.appendChild(this.makeRotateButton("ab-rotate"));
 
     // Libellé (repliable).
     const label = document.createElement("div");
@@ -444,7 +446,9 @@ export class TokenActionBar extends FloatingBar {
   // Ancrage aux bords, orientation et reflow : hérités de FloatingBar. La barre
   // déclare seulement sa clé de réglage et son ancrage par défaut.
   get dockSettingKey() { return "dockPosition"; }
-  get defaultDock() { return "bottom-center"; }
+  get orientSettingKey() { return "tokenOrientation"; }
+  get defaultEdge() { return "bottom"; }
+  get defaultOrientation() { return "h"; }
 
   /**
    * Plafonne la barre à l'espace utile selon son orientation : largeur limitée au
@@ -454,10 +458,9 @@ export class TokenActionBar extends FloatingBar {
    */
   constrainSize() {
     if (!this.bar || this.bar.style.display === "none") return;
-    // Orientation déduite de l'ancrage (fiable même avant que la classe fb-vertical
-    // ne soit posée par applyDock) : gauche/droite → verticale, sinon horizontale.
-    const dock = this.getDock();
-    const vertical = dock.startsWith("left") || dock.startsWith("right");
+    // Barre verticale = ancrée ET orientation « v » ; sinon horizontale (inclut le mode
+    // libre). Lu avant qu'applyDock ne pose la classe fb-vertical, d'où l'accès direct.
+    const vertical = this.isDocked() && this.getOrientation() === "v";
     if (vertical) {
       this.bar.style.maxWidth = "";
       this.bar.style.maxHeight = `${window.innerHeight - 8}px`;

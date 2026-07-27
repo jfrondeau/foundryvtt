@@ -22,38 +22,37 @@ function toggleFeature(cls, on) {
 }
 
 /**
- * Choix d'ancrage communs aux barres flottantes : « Libre » (glisser-déposer) ou
- * un bord de l'écran × un alignement. Gauche/droite ancrent en vertical, haut/bas
- * en horizontal (voir FloatingBar.applyDock).
+ * Bord d'ancrage des barres flottantes : « Libre » (glisser-déposer, position
+ * continue mémorisée) ou un bord de l'écran. L'orientation est INDÉPENDANTE du bord
+ * (réglage séparé + bouton ↻) ; la position le long du bord est continue et posée au
+ * glisser. Voir FloatingBar.applyDock.
  */
-const DOCK_CHOICES = {
+const EDGE_CHOICES = {
   free: "Libre (glisser-déposer)",
-  "bottom-left": "Bas · gauche",
-  "bottom-center": "Bas · centre",
-  "bottom-right": "Bas · droite",
-  "top-left": "Haut · gauche",
-  "top-center": "Haut · centre",
-  "top-right": "Haut · droite",
-  "left-top": "Gauche · haut",
-  "left-center": "Gauche · centre",
-  "left-bottom": "Gauche · bas",
-  "right-top": "Droite · haut",
-  "right-center": "Droite · centre",
-  "right-bottom": "Droite · bas",
+  top: "Bord haut",
+  bottom: "Bord bas",
+  left: "Bord gauche",
+  right: "Bord droit",
 };
+
+/** Orientation de la barre, indépendante du bord (bascule aussi via le bouton ↻). */
+const ORIENT_CHOICES = { h: "Horizontale", v: "Verticale" };
 
 // ── Panneaux de configuration par barre (bouton « Configurer… ») ──────────────
 // Chaque panneau présente les clés listées, dans cet ordre. Les réglages restent
 // enregistrés plus bas (avec name/hint/onChange) mais en `config: false`.
+// Chaque panneau présente aussi « dockMargin » (réglage GLOBAL commun aux barres) :
+// c'est le seul accès à ce réglage quand le HUD joueur est masqué (les panneaux par
+// barre s'ouvrent alors par clic droit sur la poignée, hors page de config native).
 const TemplateBarConfig = makeSettingsPanel(
   "ats-template-config", "Barre de gabarits · Réglages", "fa-solid fa-ruler-combined",
-  ["templateDock", "templateButtonSize"],
+  ["templateDock", "templateOrientation", "dockMargin", "templateButtonSize"],
 );
 
 const CombatBarConfig = makeSettingsPanel(
   "ats-combat-config", "Suivi de combat · Réglages", "fa-solid fa-swords",
   [
-    "combatDock", "combatCurrentInline", "showImages", "imageMode", "featuredImageMode",
+    "combatDock", "combatOrientation", "dockMargin", "combatCurrentInline", "showImages", "imageMode", "featuredImageMode",
     "hideInitInCombat", "showNextButton", "rowSize", "currentImageSize",
     "autoControlToken", "autoPanToken",
   ],
@@ -62,7 +61,7 @@ const CombatBarConfig = makeSettingsPanel(
 const TokenBarConfig = makeSettingsPanel(
   "ats-token-config", "Barre d'action du token · Réglages", "fa-solid fa-hand-fist",
   [
-    "dockPosition", "tokenButtonSize", "includeInventory", "onlyEquippedWeapons",
+    "dockPosition", "tokenOrientation", "dockMargin", "tokenButtonSize", "includeInventory", "onlyEquippedWeapons",
     "includeFeatures", "includeSpells", "showGroupLabels", "dedupeByName",
     "alwaysShowFeatureNames",
   ],
@@ -109,20 +108,37 @@ function reorderBarSettings(root) {
 }
 
 /**
- * Enregistre un réglage d'ancrage pour une barre (présenté dans son panneau).
+ * Enregistre le réglage de BORD d'ancrage d'une barre (présenté dans son panneau).
  * @param {string} key      Clé du réglage (déclarée par la barre via `dockSettingKey`).
  * @param {string} name     Libellé affiché.
- * @param {string} def      Ancrage par défaut.
+ * @param {string} def      Bord par défaut (« free » | top | bottom | left | right).
  * @param {() => void} onChange Rappel appliquant l'ancrage sur l'instance vivante.
  */
 function registerDock(key, name, def, onChange) {
   game.settings.register(MODULE_ID, key, {
     name,
-    hint: "Ancre la barre sur un bord de l'écran (gauche/droite = vertical, haut/bas = horizontal). " +
-          "« Libre » = glisser-déposer, position mémorisée. Astuce : glisser la barre près d'un bord l'y ancre aussi.",
+    hint: "Colle la barre sur un bord de l'écran (position continue le long du bord, posée au glisser). " +
+          "« Libre » = glisser-déposer libre. L'orientation est indépendante (réglage ci-dessous + bouton ↻). " +
+          "Astuce : glisser la barre près d'un bord l'y ancre ; l'approcher d'une autre barre l'empile au-dessus.",
     scope: "client", config: false, type: String,
-    choices: DOCK_CHOICES,
+    choices: EDGE_CHOICES,
     default: def,
+    onChange,
+  });
+}
+
+/**
+ * Enregistre le réglage d'ORIENTATION d'une barre (indépendant du bord ; bouton ↻).
+ * @param {string} key      Clé du réglage (déclarée par la barre via `orientSettingKey`).
+ * @param {() => void} onChange Rappel appliquant l'orientation sur l'instance vivante.
+ */
+function registerOrientation(key, onChange) {
+  game.settings.register(MODULE_ID, key, {
+    name: "Orientation de la barre",
+    hint: "Horizontale ou verticale, indépendamment du bord d'ancrage. Aussi accessible par le bouton ↻ de la barre.",
+    scope: "client", config: false, type: String,
+    choices: ORIENT_CHOICES,
+    default: "h",
     onChange,
   });
 }
@@ -169,6 +185,8 @@ export function registerSettings() {
   // ── Barre de gabarits (panneau TemplateBarConfig) ───────────────────────────
   registerDock("templateDock", "Ancrage de la barre", "free",
     () => SpellTemplateBar.instance?.applyDock());
+  registerOrientation("templateOrientation",
+    () => SpellTemplateBar.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "templateButtonSize", {
     name: "Taille des boutons (px)",
@@ -182,6 +200,8 @@ export function registerSettings() {
   const sizeCombat = () => CombatOverlay.instance?.applySizes();
 
   registerDock("combatDock", "Ancrage de la barre", "free",
+    () => CombatOverlay.instance?.applyDock());
+  registerOrientation("combatOrientation",
     () => CombatOverlay.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "combatCurrentInline", {
@@ -259,7 +279,9 @@ export function registerSettings() {
   // ── Barre d'action du token (panneau TokenBarConfig) ────────────────────────
   const reRenderToken = () => TokenActionBar.instance?.render();
 
-  registerDock("dockPosition", "Ancrage de la barre", "bottom-center",
+  registerDock("dockPosition", "Ancrage de la barre", "bottom",
+    () => TokenActionBar.instance?.applyDock());
+  registerOrientation("tokenOrientation",
     () => TokenActionBar.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "tokenButtonSize", {
@@ -359,6 +381,22 @@ export function registerSettings() {
     } catch (err) {
       console.warn("[Arthak's Table] réordonnancement des réglages:", err);
     }
+  });
+
+  // Migration des valeurs d'ancrage héritées (« bottom-center », « left-center »… →
+  // bord seul + orientation). Une passe par client, l'ancrage étant de portée client.
+  Hooks.once("ready", () => {
+    const migrate = (edgeKey, orientKey) => {
+      const raw = game.settings.get(MODULE_ID, edgeKey);
+      if (typeof raw !== "string" || !raw.includes("-")) return; // déjà au nouveau format
+      const edge = raw.split("-")[0];
+      const normalized = ["top", "bottom", "left", "right"].includes(edge) ? edge : "free";
+      game.settings.set(MODULE_ID, edgeKey, normalized);
+      if (orientKey) game.settings.set(MODULE_ID, orientKey, (edge === "left" || edge === "right") ? "v" : "h");
+    };
+    migrate("dockPosition", "tokenOrientation");
+    migrate("templateDock", "templateOrientation");
+    migrate("combatDock", "combatOrientation");
   });
 }
 

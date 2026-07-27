@@ -77,8 +77,9 @@ export class SpellTemplateBar extends FloatingBar {
     this.bar = bar;
     document.body.appendChild(bar);
 
-    // Poignée de déplacement.
+    // Poignée de déplacement + bouton ↻ (rotation, visible seulement quand ancrée).
     bar.appendChild(this.makeHandle("tb-handle"));
+    bar.appendChild(this.makeRotateButton("tb-rotate"));
 
     // Libellé (repliable).
     const label = document.createElement("div");
@@ -168,8 +169,10 @@ export class SpellTemplateBar extends FloatingBar {
     this.bar?.style.setProperty("--tb-btn", `${size}px`);
   }
 
-  // Ancrage aux bords : hérité de FloatingBar. Défaut « free » (position libre).
+  // Ancrage aux bords : hérité de FloatingBar. Bord par défaut « free » (position libre) ;
+  // orientation explicite via le bouton ↻ (défaut horizontale).
   get dockSettingKey() { return "templateDock"; }
+  get orientSettingKey() { return "templateOrientation"; }
 
   // ── Minimiser (skeleton dans FloatingBar) ──────────────────────────────────
   get collapsedClass() { return "stb-collapsed"; }

@@ -271,6 +271,7 @@ export class CombatOverlay extends FloatingBar {
     header.className = "co-header";
 
     header.appendChild(this.makeHandle("co-handle", "Glisser pour déplacer · clic droit : réglages"));
+    header.appendChild(this.makeRotateButton("co-rotate"));
 
     const round = document.createElement("div");
     round.className = "co-round";
@@ -1039,6 +1040,8 @@ export class CombatOverlay extends FloatingBar {
   // Position : héritée de FloatingBar ; seul le défaut change (coin haut-gauche).
   defaultPosition() { return { left: 10, top: 80 }; }
 
-  // Ancrage aux bords : hérité de FloatingBar. Défaut « free » (position libre).
+  // Ancrage aux bords : hérité de FloatingBar. Bord par défaut « free » ; orientation
+  // explicite via le bouton ↻ (défaut horizontale = rail en ligne quand ancré).
   get dockSettingKey() { return "combatDock"; }
+  get orientSettingKey() { return "combatOrientation"; }
 }

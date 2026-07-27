@@ -14,6 +14,16 @@
   box-shadow: inset 0 0 24px rgba(255, 122, 26, 0.25);
 }
 
+/* ── Bouton ↻ de rotation d'orientation (commun aux barres ancrables) ────────── */
+/* Masqué en mode libre (l'orientation ne s'applique qu'ancrée) ; affiché dès que la
+   barre porte la classe .fb-docked. */
+.fb-rotate {
+  flex: 0 0 auto; display: none; cursor: pointer; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 13px; line-height: 1;
+}
+.fb-rotate:hover { color: #fff; }
+.fb-docked .fb-rotate { display: inline-flex; align-items: center; }
+
 /* ╔═══ BARRE DE GABARITS ══════════════════════════════════════════════════╗ */
 /* ── Barre de gabarits ──────────────────────────────────────────────────────── */
 #spell-template-bar {
