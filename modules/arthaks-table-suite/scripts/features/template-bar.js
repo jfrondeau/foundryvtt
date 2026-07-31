@@ -81,6 +81,9 @@ export class SpellTemplateBar extends FloatingBar {
     bar.appendChild(this.makeHandle("tb-handle"));
     bar.appendChild(this.makeRotateButton("tb-rotate"));
 
+    // Pastille d'identité (visible seulement une fois la barre repliée).
+    bar.appendChild(this.makeBadge("fa-draw-polygon"));
+
     // Libellé (repliable).
     const label = document.createElement("div");
     label.className = "tb-label tb-collapsible";

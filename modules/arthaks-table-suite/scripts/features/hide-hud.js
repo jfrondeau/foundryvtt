@@ -1,29 +1,41 @@
 /**
- * Hide HUD — deux masquages distincts, à granularités différentes :
+ * Masquage de l'interface — MATRICE par AUDIENCE.
  *
- *  1. Vue JOUEUR (tout-ou-rien, scope monde) : réglage « hidePlayerHud ». Ne
- *     conserve que le canvas (et cette table de jeu), avec en option le journal de
- *     chat. Réservé au MJ qui le déclenche ; le MJ garde son interface complète.
- *     Implémenté par deux classes repère sur <body> exploitées par la feuille de
- *     style :
- *       - ahh-hide-hud  : masque toute l'interface (canvas conservé) ;
- *       - ahh-show-chat : exception « Chat » — garde .chat-scroll dans la sidebar
- *                         tout en masquant la saisie (.chat-form). NB : chat-scroll
- *                         / chat-form sont des CLASSES (pas des id) en Foundry v14.
+ * Le MJ configure, depuis son écran, ce qui est masqué pour trois audiences :
+ *   • MJ            : son propre écran ;
+ *   • TV            : l'écran de table partagé (un joueur désigné, réglage « tvUser ») ;
+ *   • Autres joueurs: tous les autres clients connectés.
  *
- *  2. Vue MJ (granulaire, scope client) : le MJ coche individuellement les éléments
- *     à retirer de SON écran (barre de macros, panneau joueurs, saisie du chat,
- *     onglets de sidebar un à un…). Le choix est stocké dans le réglage « gmHidden »
- *     et appliqué en injectant dynamiquement une feuille de style « #ahh-gm-hide » :
- *     aucun CSS figé à maintenir, ajouter une cible = une ligne dans GM_HIDEABLE.
+ * Chaque audience possède sa colonne de cases « masquer », réparties en trois sections :
+ *   1. Interface — éléments du HUD Foundry (navigation, contrôles, logo, hotbar…), masqués
+ *      en injectant une feuille de style « #ahh-audience-hide » à partir de sélecteurs CSS ;
+ *   2. Onglets   — onglets de la sidebar, un par entrée (même mécanisme) ;
+ *   3. Barres    — barres flottantes de la suite (gabarits, combat, token), masquées en
+ *      basculant `display:none` sur l'élément racine de l'instance (relayout des autres).
+ *
+ * Le stockage (réglage « hideMatrix », scope MONDE) est donc partagé : le MJ écrit, chaque
+ * client résout SON audience (`currentAudienceKey`) et applique la colonne correspondante.
+ * NB : chat-scroll / chat-form sont des CLASSES (pas des id) en Foundry v14.
  */
 
 import { MODULE_ID } from "../const.js";
+import { BARS } from "./registry.js";
+import { FloatingBar } from "../lib/floating-bar.js";
 
 /**
- * Onglets de la sidebar proposés au masquage MJ, un par entrée. Chat et Paramètres
- * sont volontairement absents : indispensables (lecture des messages à la table,
- * accès à la configuration — éviter de se verrouiller dehors).
+ * Les trois audiences, dans l'ordre d'affichage des colonnes du panneau.
+ * @type {{ key: string, label: string, icon: string }[]}
+ */
+export const AUDIENCES = [
+  { key: "gm",     label: "MJ",             icon: "fa-solid fa-dungeon" },
+  { key: "tv",     label: "TV",             icon: "fa-solid fa-tv" },
+  { key: "others", label: "Autres joueurs", icon: "fa-solid fa-users" },
+];
+
+/**
+ * Onglets de la sidebar proposés au masquage, un par entrée. Chat et Paramètres sont
+ * volontairement absents : indispensables (lecture des messages à la table, accès à la
+ * configuration — éviter de se verrouiller dehors).
  * @type {{ tab: string, label: string }[]}
  */
 const SIDEBAR_TABS = [
@@ -42,19 +54,23 @@ const SIDEBAR_TABS = [
 ];
 
 /**
- * Registre déclaratif des éléments masquables sur la vue MJ, groupés pour le
- * panneau de configuration. Chaque item : `{ key, label, selector }`. `selector`
- * peut lister plusieurs cibles séparées par des virgules (liste de sélecteurs CSS).
- * @type {{ group: string, items: { key: string, label: string, selector: string }[] }[]}
+ * Registre déclaratif des éléments masquables, groupés pour le panneau de configuration.
+ * Chaque item porte une `key` stable et SOIT un `selector` CSS (Interface / Onglets, masqués
+ * par feuille de style), SOIT un `bar` (barKey d'une barre de la suite, masquée par display).
+ * @type {{ group: string, items: { key: string, label: string, selector?: string, bar?: string }[] }[]}
  */
-export const GM_HIDEABLE = [
+export const HIDEABLE = [
   {
     group: "Interface",
     items: [
-      { key: "hotbar",    label: "Barre de macros",          selector: "#hotbar" },
-      { key: "players",   label: "Panneau joueurs",          selector: "#players, #players-active" },
-      { key: "chatInput", label: "Saisie du chat",           selector: ".chat-form, #chat-message, #chat-controls" },
-      { key: "chatMenu",  label: "Menu d'édition du chat",   selector: ".editor-menu" },
+      { key: "navigation",    label: "Navigation des scènes",   selector: "#navigation" },
+      { key: "sceneControls", label: "Contrôles / outils",      selector: "#controls, #scene-controls" },
+      { key: "logo",          label: "Logo Foundry",            selector: "#logo" },
+      { key: "players",       label: "Panneau joueurs",         selector: "#players, #players-active" },
+      { key: "hotbar",        label: "Barre de macros",         selector: "#hotbar" },
+      { key: "chatInput",     label: "Saisie du chat",          selector: ".chat-form, #chat-message, #chat-controls" },
+      { key: "chatMenu",      label: "Menu d'édition du chat",  selector: ".editor-menu" },
+      { key: "sidebar",       label: "Barre latérale entière",  selector: "#ui-right, #sidebar" },
     ],
   },
   {
@@ -65,123 +81,303 @@ export const GM_HIDEABLE = [
       selector: `#sidebar-tabs menu > li:has(button[data-tab="${tab}"])`,
     })),
   },
+  {
+    group: "Barres du module",
+    items: BARS.map((b) => ({ key: `bar-${b.barKey}`, label: b.label, bar: b.barKey })),
+  },
 ];
+
+/**
+ * Clés d'onglets, pour composer les valeurs par défaut sans se répéter.
+ * @type {string[]}
+ */
+const TAB_KEYS = SIDEBAR_TABS.map((t) => `tab-${t.tab}`);
+
+/**
+ * Valeurs par défaut de la matrice (rétablies par le bouton « Rétablir les défauts ») :
+ *   • MJ      — rien de masqué (écran de travail complet) ;
+ *   • TV      — écran de table épuré : tout le HUD sauf la sidebar (le chat reste lisible),
+ *               tous les onglets masqués, barres conservées ;
+ *   • Autres  — rien de masqué (appareils personnels des joueurs, interface normale).
+ * @type {{ gm: object, tv: object, others: object }}
+ */
+export const HIDE_DEFAULTS = {
+  gm: {},
+  tv: Object.fromEntries(
+    ["navigation", "sceneControls", "logo", "players", "hotbar", "chatInput", "chatMenu", ...TAB_KEYS]
+      .map((k) => [k, true]),
+  ),
+  others: {},
+};
 
 export class HideHud {
   /**
-   * Applique les deux masquages (joueur + MJ). Un changement de réglage monde
-   * (hidePlayerHud/showChat) déclenche ce onChange sur tous les clients connectés ;
-   * un changement de « gmHidden » (scope client) ne concerne que le MJ local.
+   * Audience de CE client : « gm » si MJ, sinon « tv » si c'est le joueur désigné écran de
+   * table (réglage « tvUser »), sinon « others ».
+   * @returns {string}
    */
-  static apply() {
-    HideHud.applyPlayerHud();
-    HideHud.applyGmHide();
+  static currentAudienceKey() {
+    if (game.user.isGM) return "gm";
+    const tv = game.settings.get(MODULE_ID, "tvUser");
+    return tv && game.user.id === tv ? "tv" : "others";
   }
 
-  /** Masquage tout-ou-rien de l'interface, pour les JOUEURS uniquement. */
-  static applyPlayerHud() {
-    const active   = !!game.settings.get(MODULE_ID, "hidePlayerHud") && !game.user.isGM;
-    const showChat = !!game.settings.get(MODULE_ID, "showChat");
-    document.body.classList.toggle("ahh-hide-hud", active);
-    document.body.classList.toggle("ahh-show-chat", active && showChat);
+  /** Matrice complète { gm, tv, others } (objet vide par défaut, jamais null). */
+  static matrix() {
+    const m = game.settings.get(MODULE_ID, "hideMatrix");
+    return m && typeof m === "object" ? m : {};
+  }
 
-    // Best-effort : garder l'onglet Chat actif pour que #chat-scroll reste affiché.
-    if (active && showChat) {
-      try { ui.sidebar?.changeTab?.("chat", "primary"); } catch (_) { /* API variable selon version */ }
-    }
+  /** Colonne (map { key: true }) d'une audience donnée. */
+  static columnFor(audienceKey) {
+    return this.matrix()[audienceKey] ?? {};
+  }
+
+  /** Applique le masquage complet (interface + onglets + barres) pour l'audience de ce client. */
+  static apply() {
+    this.applyStyle();
+    this.reconcileBars();
   }
 
   /**
-   * Masquage granulaire de la vue MJ : injecte (ou vide) la feuille de style
-   * « #ahh-gm-hide » à partir des éléments cochés dans le réglage « gmHidden ».
-   * Ne s'applique qu'au MJ ; côté joueur la feuille reste vide.
+   * Masquage des éléments à sélecteur (Interface + Onglets) : (re)génère la feuille de style
+   * « #ahh-audience-hide » à partir de la colonne de l'audience courante. Bascule aussi la
+   * classe « ahh-chat-bare » (chat isolé rendu transparent quand la saisie est masquée).
    */
-  static applyGmHide() {
-    let style = document.getElementById("ahh-gm-hide");
+  static applyStyle() {
+    let style = document.getElementById("ahh-audience-hide");
     if (!style) {
       style = document.createElement("style");
-      style.id = "ahh-gm-hide";
+      style.id = "ahh-audience-hide";
       document.head.appendChild(style);
     }
 
-    if (!game.user.isGM) { style.textContent = ""; return; }
-
-    const hidden    = game.settings.get(MODULE_ID, "gmHidden") ?? {};
-    const selectors = GM_HIDEABLE
+    const col = this.columnFor(this.currentAudienceKey());
+    const selectors = HIDEABLE
       .flatMap((g) => g.items)
-      .filter((it) => hidden[it.key])
+      .filter((it) => it.selector && col[it.key])
       .map((it) => it.selector);
 
     style.textContent = selectors.length ? `${selectors.join(",\n")} { display: none !important; }` : "";
+    document.body.classList.toggle("ahh-chat-bare", !!col.chatInput);
   }
 
   /**
-   * Bascule l'état masqué d'un élément MJ et persiste le réglage (l'onChange de
-   * « gmHidden » ré-applique la feuille de style, d'où l'aperçu en direct).
-   * @param {string} key - Clé de l'élément dans GM_HIDEABLE.
+   * (Dé)marre les BARRES selon l'audience de ce client : il n'y a plus de réglage « Activer »,
+   * une barre tourne ici dès que la colonne de l'audience courante ne la masque pas. Démarre
+   * les barres à afficher (si pas déjà vivantes), détruit celles masquées. Idempotent : appelé
+   * au démarrage et à chaque changement de matrice / de joueur TV.
+   */
+  static reconcileBars() {
+    for (const b of BARS) {
+      const hidden = !!this.columnFor(this.currentAudienceKey())[`bar-${b.barKey}`];
+      if (hidden) b.cls.instance?.destroy();
+      else if (!b.cls.instance) b.cls.start();
+    }
+    FloatingBar.layoutAll();
+  }
+
+  /**
+   * Bascule une cellule de la matrice et persiste (l'onChange de « hideMatrix » ré-applique
+   * sur tous les clients, d'où l'aperçu en direct).
+   * @param {string} audienceKey - « gm » | « tv » | « others ».
+   * @param {string} key - Clé de l'élément dans HIDEABLE.
    * @param {boolean} on - true pour masquer, false pour réafficher.
    */
-  static setGmHidden(key, on) {
-    const cur = foundry.utils.deepClone(game.settings.get(MODULE_ID, "gmHidden") ?? {});
-    if (on) cur[key] = true;
-    else delete cur[key];
-    return game.settings.set(MODULE_ID, "gmHidden", cur);
+  static setCell(audienceKey, key, on) {
+    const m = foundry.utils.deepClone(this.matrix());
+    const col = (m[audienceKey] ??= {});
+    if (on) col[key] = true;
+    else delete col[key];
+    return game.settings.set(MODULE_ID, "hideMatrix", m);
+  }
+
+  /**
+   * Bascule TOUS les éléments d'une catégorie pour une audience (toggle « tout cocher /
+   * décocher » de l'en-tête de section).
+   * @param {string} audienceKey - « gm » | « tv » | « others ».
+   * @param {{ key: string }[]} items - Éléments de la catégorie.
+   * @param {boolean} on - true pour tout masquer, false pour tout réafficher.
+   */
+  static setGroup(audienceKey, items, on) {
+    const m = foundry.utils.deepClone(this.matrix());
+    const col = (m[audienceKey] ??= {});
+    for (const it of items) {
+      if (on) col[it.key] = true;
+      else delete col[it.key];
+    }
+    return game.settings.set(MODULE_ID, "hideMatrix", m);
+  }
+
+  /** Rétablit la matrice à ses valeurs par défaut (HIDE_DEFAULTS). */
+  static resetDefaults() {
+    return game.settings.set(MODULE_ID, "hideMatrix", foundry.utils.deepClone(HIDE_DEFAULTS));
   }
 }
 
 /**
- * Panneau de configuration du masquage MJ : une case à cocher par élément
- * masquable (registre GM_HIDEABLE). Les changements sont persistés et appliqués en
- * direct (aperçu immédiat à la table). Rendu en DOM brut, sans template Handlebars,
- * pour rester cohérent avec le reste de la suite.
+ * Panneau de configuration du masquage : sélecteur du joueur « TV » puis matrice
+ * audience × élément (case = « masquer »), groupée en sections avec un toggle « tout
+ * cocher / décocher » par catégorie et par colonne, et un bouton « Rétablir les défauts ».
+ * Les changements sont persistés et appliqués en direct. Rendu en DOM brut, sans template
+ * Handlebars, pour rester cohérent avec le reste de la suite.
  */
-export class GmHideConfig extends foundry.applications.api.ApplicationV2 {
+export class HideConfig extends foundry.applications.api.ApplicationV2 {
   static DEFAULT_OPTIONS = {
-    id: "ahh-gm-hide-config",
-    classes: ["ahh-gm-hide-config"],
-    window: { title: "Masquage MJ · Éléments masqués", icon: "fa-solid fa-eye-slash" },
-    position: { width: 420, height: "auto" },
+    id: "ahh-hide-config",
+    classes: ["ahh-hide-config"],
+    window: { title: "Masquage · Interface, onglets et barres", icon: "fa-solid fa-eye-slash" },
+    position: { width: 620, height: "auto" },
   };
 
+  /** Petite fabrique de cellule de grille (div à classe, texte optionnel). */
+  _cell(cls, text) {
+    const d = document.createElement("div");
+    d.className = cls;
+    if (text) d.textContent = text;
+    return d;
+  }
+
   /**
-   * Construit le contenu de la fenêtre : les groupes du registre, chacun en
-   * <fieldset>, avec une case à cocher par élément masquable.
+   * Construit le contenu : bandeau d'aide, sélecteur du joueur TV, grille de la matrice
+   * (en-tête d'audiences, puis par section un en-tête à toggles et une ligne par élément),
+   * et pied avec le bouton de réinitialisation.
    * @returns {HTMLElement} Le fragment racine à insérer dans la fenêtre.
    */
   async _renderHTML() {
-    const hidden = game.settings.get(MODULE_ID, "gmHidden") ?? {};
     const root = document.createElement("div");
-    root.className = "ahh-gm-hide-body";
+    root.className = "ahh-hide-body";
 
     const hint = document.createElement("p");
     hint.className = "notes";
-    hint.textContent = "Masque les éléments cochés sur VOTRE écran (MJ) uniquement. Appliqué en direct.";
+    hint.textContent =
+      "Coche ce que tu veux MASQUER, par audience. MJ = ton écran ; TV = l'écran de table " +
+      "(joueur désigné ci-dessous) ; Autres = les autres joueurs. Appliqué en direct.";
     root.appendChild(hint);
 
-    for (const group of GM_HIDEABLE) {
-      const fs = document.createElement("fieldset");
-      const legend = document.createElement("legend");
-      legend.textContent = group.group;
-      fs.appendChild(legend);
+    root.appendChild(this._buildTvSelector());
+    root.appendChild(this._buildMirrorToggle());
 
-      for (const item of group.items) {
-        const row = document.createElement("label");
-        row.className = "ahh-gm-hide-row";
+    const grid = document.createElement("div");
+    grid.className = "ahh-hide-grid";
+    root.appendChild(grid);
 
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = !!hidden[item.key];
-        cb.addEventListener("change", () => HideHud.setGmHidden(item.key, cb.checked));
-
-        const span = document.createElement("span");
-        span.textContent = item.label;
-
-        row.append(cb, span);
-        fs.appendChild(row);
-      }
-      root.appendChild(fs);
+    // En-tête : cellule vide (colonne des libellés) + une par audience.
+    grid.appendChild(this._cell("ahh-hide-corner"));
+    for (const a of AUDIENCES) {
+      const h = this._cell("ahh-hide-head");
+      h.innerHTML = `<i class="${a.icon}"></i><span>${a.label}</span>`;
+      grid.appendChild(h);
     }
+
+    for (const group of HIDEABLE) {
+      // Ligne d'en-tête de section : nom + un toggle « tout » par audience.
+      grid.appendChild(this._cell("ahh-hide-legend", group.group));
+      for (const a of AUDIENCES) grid.appendChild(this._buildGroupToggle(a, group));
+
+      // Une ligne par élément masquable.
+      for (const item of group.items) {
+        grid.appendChild(this._cell("ahh-hide-label", item.label));
+        for (const a of AUDIENCES) grid.appendChild(this._buildCellToggle(a, item));
+      }
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "ahh-hide-footer";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.innerHTML = `<i class="fa-solid fa-rotate-left"></i> Rétablir les valeurs par défaut`;
+    reset.addEventListener("click", async () => { await HideHud.resetDefaults(); this.render(); });
+    footer.appendChild(reset);
+    root.appendChild(footer);
+
     return root;
+  }
+
+  /** Ligne « Joueur TV » : liste déroulante des utilisateurs non-MJ (+ « Aucun »). */
+  _buildTvSelector() {
+    const row = document.createElement("div");
+    row.className = "ahh-hide-tv";
+
+    const label = document.createElement("label");
+    label.htmlFor = "ahh-tv-user";
+    label.innerHTML = `<i class="fa-solid fa-tv"></i> Écran de table (joueur TV)`;
+
+    const select = document.createElement("select");
+    select.id = "ahh-tv-user";
+    const current = game.settings.get(MODULE_ID, "tvUser") ?? "";
+
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = "— Aucun —";
+    none.selected = current === "";
+    select.appendChild(none);
+
+    for (const u of game.users.filter((u) => !u.isGM)) {
+      const opt = document.createElement("option");
+      opt.value = u.id;
+      opt.textContent = u.name;
+      opt.selected = u.id === current;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", () => game.settings.set(MODULE_ID, "tvUser", select.value));
+
+    row.append(label, select);
+    return row;
+  }
+
+  /**
+   * Ligne « Mode table (miroir 180°) » : copie retournée des barres au coin opposé, pour les
+   * joueurs assis en face. Ne s'applique QU'À l'écran de table (joueur TV désigné ci-dessus).
+   */
+  _buildMirrorToggle() {
+    const row = document.createElement("label");
+    row.className = "ahh-hide-mirror";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = game.settings.get(MODULE_ID, "tableMode") === true;
+    cb.addEventListener("change", () => game.settings.set(MODULE_ID, "tableMode", cb.checked));
+
+    const span = document.createElement("span");
+    span.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Mode table (copie miroir 180° sur l'écran TV)`;
+
+    row.append(cb, span);
+    return row;
+  }
+
+  /**
+   * Toggle « tout cocher / décocher » d'une catégorie pour une audience. Coché si tous les
+   * éléments le sont, indéterminé si seulement certains.
+   */
+  _buildGroupToggle(audience, group) {
+    const c = this._cell("ahh-hide-legend-toggle");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.title = "Tout cocher / décocher cette catégorie";
+
+    const col = HideHud.columnFor(audience.key);
+    const checked = group.items.filter((it) => col[it.key]).length;
+    cb.checked = checked === group.items.length;
+    cb.indeterminate = checked > 0 && checked < group.items.length;
+
+    cb.addEventListener("change", async () => {
+      await HideHud.setGroup(audience.key, group.items, cb.checked);
+      this.render(); // resynchronise cases et états indéterminés.
+    });
+    c.appendChild(cb);
+    return c;
+  }
+
+  /** Case d'une cellule (audience × élément). */
+  _buildCellToggle(audience, item) {
+    const c = this._cell("ahh-hide-check");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!HideHud.columnFor(audience.key)[item.key];
+    cb.addEventListener("change", () => HideHud.setCell(audience.key, item.key, cb.checked));
+    c.appendChild(cb);
+    return c;
   }
 
   /** Insère le contenu construit dans la zone de fenêtre. */

@@ -9,11 +9,10 @@
  *  - Masquage de l'interface des joueurs (écran de table épuré).
  *
  * Chaque barre est activable indépendamment via ses réglages (scope monde) ; le
- * masquage de l'interface est piloté par son propre réglage « hidePlayerHud ».
+ * masquage de l'interface est piloté par une matrice par audience (MJ / écran de
+ * table « TV » / autres joueurs), cf. HideHud.
  */
-import { MODULE_ID } from "./const.js";
 import { registerSettings, registerKeybindings } from "./settings.js";
-import { BARS } from "./features/registry.js";
 import { HideHud } from "./features/hide-hud.js";
 
 Hooks.once("init", () => {
@@ -22,8 +21,7 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("ready", () => {
-  for (const { cls, enable } of BARS) {
-    if (game.settings.get(MODULE_ID, enable)) cls.start();
-  }
+  // Plus de réglage « Activer » : HideHud.apply() démarre les barres que l'audience de ce
+  // client affiche (et masque le reste de l'interface selon la matrice).
   HideHud.apply();
 });

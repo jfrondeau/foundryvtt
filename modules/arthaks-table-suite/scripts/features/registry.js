@@ -1,32 +1,24 @@
 /**
- * Registre déclaratif des barres flottantes activables.
+ * Registre déclaratif des barres flottantes de la suite.
  *
- * Chaque entrée décrit le réglage d'activation (scope monde) et la classe associée
- * (interface commune : `static start()` idempotent, `static instance`, `destroy()`).
- * `main.js` et `settings.js` itèrent ce registre au lieu de câbler chaque barre à la
- * main. Hide HUD n'y figure PAS : son interrupteur est le réglage « hidePlayerHud ».
+ * Chaque entrée associe une classe (interface commune : `static start()` idempotent,
+ * `static instance`, `destroy()`) à son identifiant court `barKey` et son libellé.
+ * `main.js` et `settings.js` itèrent ce registre au lieu de câbler chaque barre à la main.
+ *
+ * Il n'y a PLUS de réglage « Activer » par barre : une barre tourne sur un client dès lors
+ * que l'audience de ce client ne la masque pas (matrice de masquage, cf. hide-hud.js). Le
+ * masquage lui-même n'a pas d'interrupteur : il s'applique en continu selon la matrice.
+ *
+ * `barKey` (celui passé à FloatingBar, servant de namespace localStorage) est aussi la clé
+ * stable dans la matrice de masquage (`bar-<barKey>`). `label` est le libellé court réutilisé
+ * par la section « Barres du module » du panneau de masquage.
  */
 import { SpellTemplateBar } from "./template-bar.js";
 import { CombatOverlay } from "./combat-bar.js";
 import { TokenActionBar } from "./token-bar.js";
 
 export const BARS = [
-  {
-    cls: SpellTemplateBar,
-    enable: "enableTemplateBar",
-    name: "Activer · Barre de gabarits",
-    hint: "Barre flottante de gabarits de sort (mode gabarit Regions de dnd5e).",
-  },
-  {
-    cls: CombatOverlay,
-    enable: "enableCombatBar",
-    name: "Activer · Suivi de combat",
-    hint: "Overlay de suivi de combat compact superposé à la scène.",
-  },
-  {
-    cls: TokenActionBar,
-    enable: "enableTokenBar",
-    name: "Activer · Barre d'action du token",
-    hint: "Barre d'actions (armes, features, sorts) du token sélectionné.",
-  },
+  { cls: SpellTemplateBar, barKey: "template", label: "Barre de gabarits" },
+  { cls: CombatOverlay,    barKey: "combat",   label: "Suivi de combat" },
+  { cls: TokenActionBar,   barKey: "token",    label: "Barre d'action du token" },
 ];

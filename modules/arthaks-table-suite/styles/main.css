@@ -36,6 +36,18 @@
 .fb-rotate:hover { color: #fff; }
 .fb-docked .fb-rotate { display: inline-flex; align-items: center; }
 
+/* ── Repli commun à toutes les barres ─────────────────────────────────────────
+   Une barre minimisée ne montre que : poignée · pastille d'identité · bouton
+   d'ouverture. Tout le reste (contenu repliable, rotation, libellés…) est masqué,
+   pour que les barres repliées aient la même silhouette et s'alignent entre elles. */
+.fb-badge {
+  display: none; flex: 0 0 auto; align-items: center; justify-content: center;
+  color: #cdd2dd; font-size: 14px; line-height: 1; padding: 0 2px; pointer-events: none;
+}
+.fb-collapsed .fb-badge { display: inline-flex; }
+/* La rotation n'a aucun sens sur une barre réduite : on la masque. */
+.fb-collapsed .fb-rotate { display: none !important; }
+
 /* ╔═══ BARRE DE GABARITS ══════════════════════════════════════════════════╗ */
 /* ── Barre de gabarits ──────────────────────────────────────────────────────── */
 #spell-template-bar {
@@ -94,8 +106,8 @@
 }
 #spell-template-bar .tb-toggle:hover { color: #fff; border-color: #ff6400; }
 
-/* ── État minimisé : ne reste que la poignée + le toggle ─────────────────────── */
-#spell-template-bar.stb-collapsed { gap: 2px; padding: 3px 5px; }
+/* ── État minimisé : poignée + pastille d'identité + toggle ──────────────────── */
+#spell-template-bar.stb-collapsed { gap: 4px; padding: 3px 5px; }
 #spell-template-bar.stb-collapsed .tb-collapsible { display: none; }
 
 /* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
@@ -147,7 +159,12 @@
 #combat-overlay .co-rail { border-radius: 0 0 0 8px; }
 #combat-overlay .co-detail { border-radius: 0 0 8px 0; padding: 5px; }
 #combat-overlay .co-editlist { border-radius: 0 0 8px 8px; }
-#combat-overlay.co-collapsed .co-header { border-radius: 8px; }
+/* Replié : même silhouette que les autres barres (poignée + pastille + toggle).
+   On masque le libellé du round et le bouton d'options, et on aligne l'espacement
+   sur les autres barres réduites. */
+#combat-overlay.co-collapsed .co-header { border-radius: 8px; padding: 3px 5px; gap: 4px; }
+#combat-overlay.co-collapsed .co-round,
+#combat-overlay.co-collapsed .co-header .co-btn { display: none; }
 
 /* ── En-tête ──────────────────────────────────────────────────────────────── */
 #combat-overlay .co-header {
@@ -533,8 +550,8 @@
 }
 #selected-token-actions .ab-toggle:hover { color: #fff; border-color: #ff6400; }
 
-/* ── État minimisé : ne restent que la poignée + le toggle ────────────────────── */
-#selected-token-actions.ab-collapsed { gap: 2px; padding: 3px 5px; }
+/* ── État minimisé : poignée + pastille d'identité + toggle ────────────────────── */
+#selected-token-actions.ab-collapsed { gap: 4px; padding: 3px 5px; }
 #selected-token-actions.ab-collapsed .ab-collapsible { display: none; }
 
 /* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
@@ -554,86 +571,139 @@
   border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 6px;
 }
 
-/* ╔═══ MASQUAGE DE L'INTERFACE JOUEUR ═════════════════════════════════════╗ */
-/* ── Hide player HUD : masque toute l'interface des joueurs ──────────────────── */
-body.ahh-hide-hud #ui-top,
-body.ahh-hide-hud #ui-left,
-body.ahh-hide-hud #ui-bottom,
-body.ahh-hide-hud #navigation,
-body.ahh-hide-hud #controls,
-body.ahh-hide-hud #scene-controls,
-body.ahh-hide-hud #players,
-body.ahh-hide-hud #players-active,
-body.ahh-hide-hud #hotbar,
-body.ahh-hide-hud #logo {
-  display: none !important;
-}
-
-/* Sans l'exception « Chat » : la sidebar entière est masquée aussi. */
-body.ahh-hide-hud:not(.ahh-show-chat) #ui-right,
-body.ahh-hide-hud:not(.ahh-show-chat) #sidebar {
-  display: none !important;
-}
-
-/* Avec l'exception « Chat » : la sidebar reste. On masque la zone de saisie
-   (.chat-form contient #chat-controls, les modes de message et l'éditeur
-   ProseMirror). NB : chat-scroll / chat-form sont des CLASSES en v14. */
-body.ahh-hide-hud.ahh-show-chat .chat-form {
-  display: none !important;
-}
-
-/* La zone de saisie ne doit jamais apparaître pour un joueur au HUD masqué — ni
-   dans la sidebar, ni dans la fenêtre flottante #chat-notifications (affichée
-   quand la sidebar est repliée). #chat-message = éditeur ProseMirror. */
-body.ahh-hide-hud #chat-message,
-body.ahh-hide-hud #chat-controls {
-  display: none !important;
-}
-
-/* Barre d'onglets de la sidebar : on ne garde que le bouton Chat et le toggle
-   d'ouverture/fermeture ; tous les autres onglets sont masqués. Le joueur peut
-   ainsi ouvrir/fermer la sidebar lui-même pour lire le chat. */
-body.ahh-hide-hud.ahh-show-chat #sidebar-tabs menu > li:not(:has(button[data-tab="chat"])):not(:has(button[data-action="toggleState"])) {
-  display: none !important;
-}
-
-/* Côté joueur, le chat isolé reste complètement transparent (défaut Foundry) :
-   seules les bulles de message flottent au-dessus de la scène. */
-body.ahh-hide-hud.ahh-show-chat #sidebar-content #chat {
+/* ╔═══ MASQUAGE DE L'INTERFACE (matrice par audience) ═════════════════════╗ */
+/* Le masquage lui-même est injecté dynamiquement (#ahh-audience-hide) : pas de
+   règle figée ici. Seule reste la finition « chat isolé transparent » lorsque la
+   saisie du chat est masquée pour l'audience de ce client (classe ahh-chat-bare) :
+   seules les bulles de message flottent alors au-dessus de la scène. */
+body.ahh-chat-bare #sidebar-content #chat {
   background: transparent !important;
 }
 
-/* ── Panneau de masquage granulaire (vue MJ) : cases à cocher groupées ───────── */
-.ahh-gm-hide-config .ahh-gm-hide-body {
+/* ── Panneau de masquage : matrice audience × élément ────────────────────────── */
+/* La fenêtre ne doit jamais dépasser l'écran : le contenu défile au besoin. */
+.ahh-hide-config .window-content {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.ahh-hide-config .ahh-hide-body {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
   padding: 0.5rem;
 }
 
-.ahh-gm-hide-config .ahh-gm-hide-body > .notes {
+.ahh-hide-config .ahh-hide-body > .notes {
   margin: 0;
 }
 
-.ahh-gm-hide-config fieldset {
+/* Sélecteur du joueur TV, au-dessus de la grille. */
+.ahh-hide-config .ahh-hide-tv {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  border: 1px solid var(--color-border-light-tertiary, #7a7971);
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.ahh-gm-hide-config .ahh-gm-hide-row {
+.ahh-hide-config .ahh-hide-tv label {
+  flex: 0 0 auto;
+  font-weight: bold;
+}
+
+.ahh-hide-config .ahh-hide-tv select {
+  flex: 1 1 auto;
+}
+
+/* Toggle « Mode table (miroir) », sous le sélecteur TV. */
+.ahh-hide-config .ahh-hide-mirror {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
 }
 
-.ahh-gm-hide-config .ahh-gm-hide-row input[type="checkbox"] {
+.ahh-hide-config .ahh-hide-mirror input[type="checkbox"] {
   flex: 0 0 auto;
   margin: 0;
+}
+
+/* Grille : colonne des libellés (souple) + 3 colonnes d'audiences (fixes). Les cellules
+   s'étirent sur la hauteur de leur rangée (align-items: stretch) pour que les bordures
+   basses de l'en-tête restent alignées ; chaque cellule centre son contenu elle-même. */
+.ahh-hide-config .ahh-hide-grid {
+  display: grid;
+  grid-template-columns: 1fr repeat(3, 6.5rem);
+  align-items: stretch;
+  border: 1px solid var(--color-border-light-tertiary, #7a7971);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ahh-hide-config .ahh-hide-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 0.35rem 0.25rem;
+  font-weight: bold;
+  text-align: center;
+  border-bottom: 2px solid var(--color-border-light-tertiary, #7a7971);
+}
+
+.ahh-hide-config .ahh-hide-head span {
+  font-size: 0.8em;
+}
+
+.ahh-hide-config .ahh-hide-corner {
+  border-bottom: 2px solid var(--color-border-light-tertiary, #7a7971);
+}
+
+/* En-tête de section : le libellé occupe la colonne 1 (auto-placé en tête de rangée),
+   les toggles suivent chacun dans leur colonne d'audience. */
+.ahh-hide-config .ahh-hide-legend {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.5rem 0.3rem;
+  font-variant: small-caps;
+  font-weight: bold;
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.ahh-hide-config .ahh-hide-legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.ahh-hide-config .ahh-hide-label {
+  display: flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem 0.2rem 1rem;
+}
+
+.ahh-hide-config .ahh-hide-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0;
+}
+
+.ahh-hide-config .ahh-hide-check input[type="checkbox"],
+.ahh-hide-config .ahh-hide-legend-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.ahh-hide-config .ahh-hide-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ahh-hide-config .ahh-hide-footer button {
+  flex: 0 0 auto;
+  width: auto;
 }
 
 /* ── Panneaux de réglages par barre (ApplicationV2, bouton « Configurer… ») ──── */

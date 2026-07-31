@@ -263,8 +263,17 @@ export class FloatingBar {
   /** Ancre opposée (réflexion par le centre) — mode miroir. */
   static oppAlign(a) { return { start: "end", end: "start", center: "center" }[a] ?? "center"; }
 
-  /** Mode table : duplique chaque barre en une copie 180° au coin opposé (réglage global). */
-  static tableMode() { try { return game.settings.get(MODULE_ID, "tableMode") === true; } catch { return false; } }
+  /**
+   * Mode table : duplique chaque barre en une copie 180° au coin opposé. Réglage MONDE, mais
+   * le miroir ne concerne QUE l'écran de table (le joueur désigné « tvUser ») — ce sont les
+   * joueurs assis en face qui regardent cet écran partagé ; les autres clients n'en montrent pas.
+   */
+  static tableMode() {
+    try {
+      if (game.settings.get(MODULE_ID, "tableMode") !== true) return false;
+      return !game.user.isGM && game.user.id === game.settings.get(MODULE_ID, "tvUser");
+    } catch { return false; }
+  }
 
   /** Marge d'ancrage à l'écran (réglage « dockMargin », défaut 8px). */
   static margin() { const raw = game.settings.get(MODULE_ID, "dockMargin"); return Number.isFinite(raw) ? raw : 8; }
@@ -578,6 +587,18 @@ export class FloatingBar {
   }
 
   /**
+   * Petite pastille d'identité (icône), visible UNIQUEMENT quand la barre est repliée
+   * (voir CSS `.fb-badge` / `.fb-collapsed`). Une fois minimisée, une barre n'affiche plus
+   * que : poignée · cette pastille · bouton d'ouverture. Elle permet de reconnaître la
+   * barre sans occuper d'espace en mode déplié. À insérer entre la poignée et le toggle.
+   */
+  makeBadge(iconClass, className = "") {
+    const i = document.createElement("i");
+    i.className = `fas ${iconClass} fb-badge ${className}`.trim();
+    return i;
+  }
+
+  /**
    * Bouton ↻ de rotation : bascule l'orientation horizontale / verticale de la barre.
    * N'a de sens (et n'est visible, cf. CSS `.fb-docked .fb-rotate`) que lorsque la barre
    * est ancrée à un bord. À n'ajouter que par les barres ayant une `orientSettingKey`.
@@ -615,6 +636,7 @@ export class FloatingBar {
 
   setCollapsed(on) {
     this.el.classList.toggle(this.collapsedClass, on);
+    this.el.classList.toggle("fb-collapsed", on); // classe partagée : styles de repli communs
     localStorage.setItem(this.collapsedKey, on ? "1" : "0");
     this.updateCollapseIcon(on);
     this.reflow(); // la largeur a changé : re-contraindre / ré-ancrer.

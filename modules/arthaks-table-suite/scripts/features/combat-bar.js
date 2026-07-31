@@ -177,7 +177,7 @@ export class CombatOverlay extends FloatingBar {
 
     this.applySizes();
     this.applyDock();
-    if (localStorage.getItem(this.collapsedKey) === "1") root.classList.add("co-collapsed");
+    if (localStorage.getItem(this.collapsedKey) === "1") root.classList.add("co-collapsed", "fb-collapsed");
   }
 
   // ── Rendu ────────────────────────────────────────────────────────────────
@@ -272,6 +272,9 @@ export class CombatOverlay extends FloatingBar {
 
     header.appendChild(this.makeHandle("co-handle", "Glisser pour déplacer · clic droit : réglages"));
     header.appendChild(this.makeRotateButton("co-rotate"));
+
+    // Pastille d'identité (visible seulement une fois la barre repliée).
+    header.appendChild(this.makeBadge("fa-khanda"));
 
     const round = document.createElement("div");
     round.className = "co-round";

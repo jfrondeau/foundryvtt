@@ -328,6 +328,9 @@ export class TokenActionBar extends FloatingBar {
     this.bar.appendChild(this.makeHandle("ab-handle"));
     this.bar.appendChild(this.makeRotateButton("ab-rotate"));
 
+    // Pastille d'identité (visible seulement une fois la barre repliée).
+    this.bar.appendChild(this.makeBadge("fa-hand-fist"));
+
     // Libellé (repliable).
     const label = document.createElement("div");
     label.className = "ab-label ab-collapsible";
@@ -398,6 +401,7 @@ export class TokenActionBar extends FloatingBar {
     this.bar.appendChild(toggle);
 
     this.bar.classList.toggle("ab-collapsed", collapsed);
+    this.bar.classList.toggle("fb-collapsed", collapsed); // classe partagée : styles de repli communs
 
     // Placement + orientation une fois le contenu construit (dimensions connues).
     this.applyDock();

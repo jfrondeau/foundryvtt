@@ -1,26 +1,20 @@
 /**
  * Enregistrement centralisé des réglages et raccourcis de la suite.
  *
- * Un réglage d'activation par barre (« enableXxx », scope monde) permet au MJ de
- * choisir ce qui tourne sur l'écran de table ; son onChange démarre/arrête la barre
- * à chaud, sans rechargement. Les réglages PROPRES à chaque barre sont enregistrés
- * en `config: false` et présentés dans un panneau dédié (bouton « Configurer… » via
- * registerMenu), pour garder la page de configuration native courte et lisible.
+ * Il n'y a PAS de réglage « Activer » par barre : une barre tourne sur un client dès que
+ * l'audience de ce client ne la masque pas (matrice de masquage, cf. hide-hud.js). Les
+ * réglages PROPRES à chaque barre sont enregistrés en `config: false` et présentés dans un
+ * panneau dédié (bouton « Configurer… » via registerMenu), pour garder la page de
+ * configuration native courte et lisible.
  */
 import { MODULE_ID } from "./const.js";
 import { BARS } from "./features/registry.js";
 import { SpellTemplateBar } from "./features/template-bar.js";
 import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
-import { HideHud, GmHideConfig } from "./features/hide-hud.js";
+import { HideHud, HideConfig, HIDE_DEFAULTS } from "./features/hide-hud.js";
 import { makeSettingsPanel } from "./lib/settings-panel.js";
 import { FloatingBar } from "./lib/floating-bar.js";
-
-/** Démarre ou détruit une barre selon l'état de son réglage d'activation. */
-function toggleFeature(cls, on) {
-  if (on) cls.start();
-  else cls.instance?.destroy();
-}
 
 /**
  * Bord d'ancrage des barres flottantes : « Libre » (glisser-déposer, position
@@ -70,8 +64,7 @@ const TokenBarConfig = makeSettingsPanel(
 
 /**
  * Descripteur du bouton « Configurer… » (registerMenu) de chaque barre, associé à
- * sa classe. Utilisé pour enregistrer les menus juste après leur case « Activer »
- * et pour replacer, au rendu, chaque bouton sous sa case (cf. reorderBarSettings).
+ * sa classe. Chaque bouton ouvre le panneau de réglages propres à la barre.
  */
 const BAR_MENUS = new Map([
   [SpellTemplateBar, {
@@ -87,26 +80,6 @@ const BAR_MENUS = new Map([
     label: "Barre d'action du token", hint: "Ancrage, contenu (armes, features, sorts) et affichage de la barre.",
   }],
 ]);
-
-/**
- * Réordonne la page de configuration native : Foundry regroupe tous les boutons de
- * menu séparément des réglages ; on replace chaque bouton « Configurer… » juste
- * après la case « Activer » de sa barre. Défensif : sans correspondance DOM, no-op.
- * @param {HTMLElement} root Racine de la fenêtre SettingsConfig.
- */
-function reorderBarSettings(root) {
-  for (const bar of BARS) {
-    const meta = BAR_MENUS.get(bar.cls);
-    if (!meta) continue;
-    const input = root.querySelector(`[name="${MODULE_ID}.${bar.enable}"]`);
-    const enableGroup = input?.closest(".form-group");
-    // Bouton de menu : par data-key, sinon par texte de label (on maîtrise les deux).
-    const btn = root.querySelector(`[data-key="${MODULE_ID}.${meta.menuKey}"]`)
-      ?? [...root.querySelectorAll("button")].find((b) => b.textContent.trim() === meta.label);
-    const menuGroup = btn?.closest(".form-group") ?? btn;
-    if (enableGroup && menuGroup) enableGroup.after(menuGroup);
-  }
-}
 
 /**
  * Enregistre le réglage de BORD d'ancrage d'une barre (présenté dans son panneau).
@@ -147,29 +120,23 @@ function registerOrientation(key, onChange) {
 
 /** Enregistre tous les réglages de la suite (appelé au hook « init »). */
 export function registerSettings() {
-  // ── Activation + bouton « Configurer… » par barre ───────────────────────────
-  // Chaque case « Activer » est suivie de son bouton de menu (réordonnés au rendu
-  // via reorderBarSettings, Foundry regroupant sinon tous les menus à part).
-  for (const { cls, enable, name, hint } of BARS) {
-    game.settings.register(MODULE_ID, enable, {
-      name, hint,
-      scope: "world", config: true, type: Boolean, default: true,
-      onChange: (v) => toggleFeature(cls, v),
-    });
+  // ── Bouton « Configurer… » par barre ────────────────────────────────────────
+  // Plus de case « Activer » : une barre tourne dès qu'une audience l'affiche (matrice de
+  // masquage). On n'enregistre que le panneau de réglages propres à chaque barre.
+  for (const { cls } of BARS) {
     const meta = BAR_MENUS.get(cls);
-    if (meta) {
-      // Rend le panneau accessible depuis la barre elle-même (clic droit sur la
-      // poignée → FloatingBar.openSettings), seul accès quand le HUD est masqué.
-      cls.SettingsPanel = meta.panel;
-      game.settings.registerMenu(MODULE_ID, meta.menuKey, {
-        name: meta.label,
-        label: meta.label,
-        hint: meta.hint,
-        icon: meta.icon,
-        type: meta.panel,
-        restricted: true,
-      });
-    }
+    if (!meta) continue;
+    // Rend le panneau accessible depuis la barre elle-même (clic droit sur la
+    // poignée → FloatingBar.openSettings), seul accès quand le HUD est masqué.
+    cls.SettingsPanel = meta.panel;
+    game.settings.registerMenu(MODULE_ID, meta.menuKey, {
+      name: meta.label,
+      label: meta.label,
+      hint: meta.hint,
+      icon: meta.icon,
+      type: meta.panel,
+      restricted: true,
+    });
   }
 
   // ── Ancrage commun à toutes les barres (réglage global, visible) ────────────
@@ -181,12 +148,10 @@ export function registerSettings() {
   });
 
   // Mode table : duplique chaque barre en une copie pivotée à 180° au coin opposé, pour les
-  // joueurs assis en face sur un écran posé à plat. Réglage global visible.
+  // joueurs assis en face. Réglage MONDE, édité dans le panneau de masquage ; il ne s'applique
+  // QU'À l'écran de table (joueur TV), cf. FloatingBar.tableMode.
   game.settings.register(MODULE_ID, "tableMode", {
-    name: "Barres · Mode table (copie miroir 180°)",
-    hint: "Affiche une copie retournée de chaque barre ancrée au coin opposé, lisible et " +
-          "cliquable par les joueurs assis de l'autre côté de la table.",
-    scope: "client", config: true, type: Boolean, default: false,
+    scope: "world", config: false, type: Boolean, default: false,
     onChange: () => FloatingBar.layoutAll(),
   });
 
@@ -348,46 +313,46 @@ export function registerSettings() {
     onChange: reRenderToken,
   });
 
-  // ── Masquage de l'interface joueur (réglages monde, visibles) ───────────────
-  // Pas de toggle « enable » dédié : « hidePlayerHud » EST son interrupteur.
-  game.settings.register(MODULE_ID, "hidePlayerHud", {
-    name: "Masquage · Masquer l'interface des joueurs",
-    hint: "Réservé au MJ. Pour les JOUEURS uniquement : ne conserve que le canvas et les barres de la table. Le MJ garde son interface complète.",
-    scope: "world", config: true, type: Boolean, default: false,
+  // ── Masquage de l'interface par AUDIENCE (matrice, scope monde) ─────────────
+  // Le MJ configure ; chaque client résout son audience et applique sa colonne. La
+  // matrice { gm, tv, others } et le joueur TV sont édités via le panneau dédié ;
+  // les onChange (monde) ré-appliquent le masquage sur tous les clients connectés.
+  game.settings.register(MODULE_ID, "hideMatrix", {
+    scope: "world", config: false, type: Object,
+    default: foundry.utils.deepClone(HIDE_DEFAULTS),
     onChange: () => HideHud.apply(),
   });
 
-  game.settings.register(MODULE_ID, "showChat", {
-    name: "Masquage · Conserver le chat",
-    hint: "Conserver le journal de chat (chat-scroll) visible pour les joueurs quand l'interface est masquée. Le champ de saisie (chat-form) reste masqué.",
-    scope: "world", config: true, type: Boolean, default: true,
+  game.settings.register(MODULE_ID, "tvUser", {
+    scope: "world", config: false, type: String, default: "",
     onChange: () => HideHud.apply(),
   });
 
-  // ── Masquage granulaire de la vue MJ (scope client, par écran) ──────────────
-  // État { [key]: true } des éléments masqués. Non affiché dans la liste : édité
-  // via le panneau dédié ci-dessous ; l'onChange ré-applique la feuille de style.
-  game.settings.register(MODULE_ID, "gmHidden", {
-    scope: "client", config: false, type: Object, default: {},
-    onChange: () => HideHud.applyGmHide(),
-  });
-
-  game.settings.registerMenu(MODULE_ID, "gmHideMenu", {
-    name: "Masquage MJ · Éléments masqués",
-    label: "Configurer le masquage (MJ)",
-    hint: "Choisir individuellement les éléments à retirer de VOTRE écran de MJ (barre de macros, panneau joueurs, saisie du chat, onglets de la sidebar…). N'affecte que votre client.",
+  game.settings.registerMenu(MODULE_ID, "hideMenu", {
+    name: "Masquage · Interface, onglets et barres",
+    label: "Configurer le masquage",
+    hint: "Choisir, par audience (MJ, écran de table « TV », autres joueurs), les éléments à masquer : " +
+          "éléments du HUD, onglets de la sidebar et barres de la suite. Le MJ pilote tous les écrans.",
     icon: "fa-solid fa-eye-slash",
-    type: GmHideConfig,
+    type: HideConfig,
     restricted: true,
   });
 
-  // Replace chaque bouton « Configurer… » juste sous la case « Activer » de sa barre.
-  Hooks.on("renderSettingsConfig", (_app, element) => {
+  // Migration du masquage granulaire MJ hérité (ancien réglage client « gmHidden »,
+  // stocké en localStorage) vers la colonne MJ de la nouvelle matrice, si celle-ci est
+  // encore vierge. Best-effort, exécuté par le MJ uniquement (la matrice est de portée monde).
+  Hooks.once("ready", () => {
     try {
-      const root = element instanceof HTMLElement ? element : element?.[0];
-      if (root) reorderBarSettings(root);
+      if (!game.user.isGM) return;
+      const matrix = game.settings.get(MODULE_ID, "hideMatrix") ?? {};
+      if (matrix.gm && Object.keys(matrix.gm).length) return; // colonne MJ déjà renseignée
+      const legacy = JSON.parse(localStorage.getItem(`${MODULE_ID}.gmHidden`) || "null");
+      if (!legacy || typeof legacy !== "object" || !Object.keys(legacy).length) return;
+      const next = foundry.utils.deepClone(matrix);
+      next.gm = legacy;
+      game.settings.set(MODULE_ID, "hideMatrix", next);
     } catch (err) {
-      console.warn("[Arthak's Table] réordonnancement des réglages:", err);
+      console.warn("[Arthak's Table] migration du masquage MJ:", err);
     }
   });
 
