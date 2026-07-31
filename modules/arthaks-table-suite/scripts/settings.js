@@ -14,6 +14,7 @@ import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
 import { HideHud, GmHideConfig } from "./features/hide-hud.js";
 import { makeSettingsPanel } from "./lib/settings-panel.js";
+import { FloatingBar } from "./lib/floating-bar.js";
 
 /** Démarre ou détruit une barre selon l'état de son réglage d'activation. */
 function toggleFeature(cls, on) {
@@ -117,9 +118,10 @@ function reorderBarSettings(root) {
 function registerDock(key, name, def, onChange) {
   game.settings.register(MODULE_ID, key, {
     name,
-    hint: "Colle la barre sur un bord de l'écran (position continue le long du bord, posée au glisser). " +
-          "« Libre » = glisser-déposer libre. L'orientation est indépendante (réglage ci-dessous + bouton ↻). " +
-          "Astuce : glisser la barre près d'un bord l'y ancre ; l'approcher d'une autre barre l'empile au-dessus.",
+    hint: "Colle la barre sur un bord de l'écran ; le long du bord elle s'ancre à un repère " +
+          "(début / centre / fin), posé au glisser. « Libre » = glisser-déposer libre. " +
+          "L'orientation est indépendante (réglage ci-dessous + bouton ↻). Astuce : plusieurs " +
+          "barres sur un même bord se rangent côte à côte, jamais l'une sur l'autre.",
     scope: "client", config: false, type: String,
     choices: EDGE_CHOICES,
     default: def,
@@ -175,11 +177,17 @@ export function registerSettings() {
     name: "Barres · Marge d'ancrage à l'écran (px)",
     hint: "Écart entre une barre ancrée et le bord de l'écran. 0 = collée au bord.",
     scope: "client", config: true, type: Number, default: 8,
-    onChange: () => {
-      SpellTemplateBar.instance?.applyDock();
-      CombatOverlay.instance?.applyDock();
-      TokenActionBar.instance?.applyDock();
-    },
+    onChange: () => FloatingBar.layoutAll(),
+  });
+
+  // Mode table : duplique chaque barre en une copie pivotée à 180° au coin opposé, pour les
+  // joueurs assis en face sur un écran posé à plat. Réglage global visible.
+  game.settings.register(MODULE_ID, "tableMode", {
+    name: "Barres · Mode table (copie miroir 180°)",
+    hint: "Affiche une copie retournée de chaque barre ancrée au coin opposé, lisible et " +
+          "cliquable par les joueurs assis de l'autre côté de la table.",
+    scope: "client", config: true, type: Boolean, default: false,
+    onChange: () => FloatingBar.layoutAll(),
   });
 
   // ── Barre de gabarits (panneau TemplateBarConfig) ───────────────────────────
@@ -397,6 +405,20 @@ export function registerSettings() {
     migrate("dockPosition", "tokenOrientation");
     migrate("templateDock", "templateOrientation");
     migrate("combatDock", "combatOrientation");
+
+    // Migration de l'état d'ancrage localStorage : { pos (fraction), seq } → { align, order }.
+    // L'ancre est dérivée de la fraction (tiers) ; l'ordre reprend le rang d'arrivée.
+    const migrateDockState = (barKey) => {
+      const lsKey = `${MODULE_ID}.${barKey}.dock.${game.user.id}`;
+      let state;
+      try { state = JSON.parse(localStorage.getItem(lsKey)); } catch { return; }
+      if (!state || typeof state !== "object" || state.align !== undefined) return; // déjà migré/absent
+      const pos = Number(state.pos);
+      const align = !Number.isFinite(pos) ? "center" : pos < 1 / 3 ? "start" : pos < 2 / 3 ? "center" : "end";
+      const order = Number.isFinite(Number(state.seq)) ? Number(state.seq) : Date.now();
+      localStorage.setItem(lsKey, JSON.stringify({ align, order }));
+    };
+    ["template", "combat", "token"].forEach(migrateDockState);
   });
 }
 
