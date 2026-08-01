@@ -1,10 +1,19 @@
-# Déploie les modules locaux vers le share Foundry.
-# Usage :  pwsh ./deploy.ps1                          (déploie tous les modules listés)
-#          pwsh ./deploy.ps1 arthaks-table-suite      (déploie un seul module)
-param([string[]]$Modules)
+# Déploie les modules du repo vers un userdata Foundry.
+# Cible LOCALE par défaut (l'install Foundry de cette machine) ; -Remote pour le serveur réseau.
+# Usage :  pwsh ./deploy.ps1                          (tous les modules -> local)
+#          pwsh ./deploy.ps1 arthaks-table-suite      (un seul module -> local)
+#          pwsh ./deploy.ps1 -Remote                  (tous les modules -> serveur 192.168.68.59)
+param(
+    [string[]]$Modules,
+    [switch]$Remote
+)
 
-$root    = $PSScriptRoot
-$destDir = "\\192.168.68.59\foundryuserdata\Data\modules"
+$root      = $PSScriptRoot
+$localDir  = Join-Path $env:LOCALAPPDATA "FoundryVTT\Data\modules"
+$remoteDir = "\\192.168.68.59\foundryuserdata\Data\modules"
+$destDir   = if ($Remote) { $remoteDir } else { $localDir }
+$target    = if ($Remote) { "REMOTE" } else { "LOCAL" }
+Write-Host "Cible : $target ($destDir)" -ForegroundColor Yellow
 
 # Modules du repo à déployer (dossiers contenant un module.json).
 $all = @("arthaks-table-suite")
