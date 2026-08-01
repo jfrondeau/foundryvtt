@@ -209,8 +209,10 @@ function buildSections(actor) {
     // Un seul passage : regroupe les sorts par niveau (0 = cantrips) dans une Map.
     const byLevel = new Map();
     for (const s of actor.items.filter(isUsableSpellItem)) {
-      const lvl = Number(s.system?.level) || 0;
-      (byLevel.get(lvl) ?? byLevel.set(lvl, []).get(lvl)).push(s);
+      const raw = Number(s.system?.level);
+      const lvl = Number.isInteger(raw) && raw > 0 ? raw : 0; // niveau fini > 0, sinon cantrip (0).
+      if (!byLevel.has(lvl)) byLevel.set(lvl, []);
+      byLevel.get(lvl).push(s);
     }
     const prep = (lvl) => dedupeByName(byLevel.get(lvl) ?? []).sort(byName);
 
@@ -274,6 +276,11 @@ export class TokenActionBar extends FloatingBar {
     this.hookIds.createItem = Hooks.on("createItem", refreshOnItem);
     this.hookIds.updateItem = Hooks.on("updateItem", refreshOnItem);
     this.hookIds.deleteItem = Hooks.on("deleteItem", refreshOnItem);
+    // Les emplacements de sorts et les ressources (actions / résistance légendaires) vivent sur
+    // l'ACTEUR, pas sur un item : sans ce hook, les compteurs restent figés après un lancer de sort.
+    this.hookIds.updateActor = Hooks.on("updateActor", (actor) => {
+      if (actor?.id && actor.id === this._activeActorId) this.render();
+    });
   }
 
   // destroy() : hérité de FloatingBar.
@@ -429,7 +436,12 @@ export class TokenActionBar extends FloatingBar {
 
     btn.addEventListener("click", (ev) => {
       ev.preventDefault();
-      item.use?.({}, { event: ev });
+      // use() est asynchrone : on capte un rejet (plus d'emplacement, activité annulée…) pour
+      // éviter une « unhandled rejection » muette et prévenir l'utilisateur.
+      Promise.resolve(item.use?.({}, { event: ev })).catch((err) => {
+        notify.warn(`Impossible d'utiliser « ${item.name} ».`);
+        console.error(err);
+      });
     });
     btn.addEventListener("contextmenu", (ev) => {
       ev.preventDefault();

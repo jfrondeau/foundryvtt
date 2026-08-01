@@ -101,7 +101,10 @@ export class SettingsPanel extends foundry.applications.api.ApplicationV2 {
       num.value = value ?? "";
       if (cfg.range) { num.min = cfg.range.min; num.max = cfg.range.max; num.step = cfg.range.step ?? 1; }
       num.addEventListener("change", () => {
-        const n = Number(num.value);
+        const raw = num.value.trim();
+        // Champ vidé → revenir au défaut : Number("") vaut 0 et écraserait la valeur par 0.
+        if (raw === "") { commit(cfg.default); num.value = cfg.default ?? ""; return; }
+        const n = Number(raw);
         commit(Number.isFinite(n) ? n : cfg.default);
       });
       return num;

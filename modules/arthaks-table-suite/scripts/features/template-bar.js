@@ -209,19 +209,25 @@ export class SpellTemplateBar extends FloatingBar {
     if (current && current !== canvas.regions) this.returnLayer = current;
     this.lastShape = shape;
 
-    // 1) Ouvre le contrôle Regions.
-    await ui.controls.activate({ control: "regions", tool: "select" });
+    try {
+      // 1) Ouvre le contrôle Regions.
+      await ui.controls.activate({ control: "regions", tool: "select" });
 
-    // 2) Active le bascule templateMode s'il ne l'est pas déjà.
-    const tm = ui.controls.control?.tools?.templateMode;
-    if (tm && !tm.active) {
-      tm.active = true;
-      try { await tm.onChange?.(null, true); } catch (e) { console.warn("[Spell Template Bar] templateMode onChange:", e); }
+      // 2) Active le bascule templateMode s'il ne l'est pas déjà.
+      const tm = ui.controls.control?.tools?.templateMode;
+      if (tm && !tm.active) {
+        tm.active = true;
+        try { await tm.onChange?.(null, true); } catch (e) { console.warn("[Spell Template Bar] templateMode onChange:", e); }
+      }
+
+      // 3) Sélectionne la forme voulue.
+      await ui.controls.activate({ control: "regions", tool: shape });
+      ui.controls.render();
+    } catch (err) {
+      notify.warn("Impossible d'activer le mode gabarit.");
+      console.error(err);
+      return;
     }
-
-    // 3) Sélectionne la forme voulue.
-    await ui.controls.activate({ control: "regions", tool: shape });
-    ui.controls.render();
 
     this.clearActiveButtons();
     this.bar.querySelector(`.tb-btn[data-shape="${shape}"]`)?.classList.add("tb-active");
@@ -233,6 +239,7 @@ export class SpellTemplateBar extends FloatingBar {
   }
 
   restoreLayer() {
+    if (this._destroyed) return; // le setTimeout différé (createRegion) a pu survivre à un destroy().
     const target = this.returnLayer ?? canvas.tokens;
     this.returnLayer = null;
     target?.activate?.();
@@ -244,12 +251,13 @@ export class SpellTemplateBar extends FloatingBar {
     const scene = canvas.scene;
     if (!scene) return;
 
-    const myId  = game.user.id;
-    const myTag = `[${game.user.name}]`;
-    const flagOwner   = (r) => r.flags?.[NS]?.owner;                          // id de l'auteur
-    const endsWithTag = (r) => /\[[^\]]+\]\s*$/.test(r.name ?? "");           // repli : nom balisé
-    const isTemplate  = (r) => flagOwner(r) != null || endsWithTag(r);
-    const isMine      = (r) => flagOwner(r) === myId || (r.name ?? "").includes(myTag);
+    // On s'appuie UNIQUEMENT sur le flag d'appartenance (fiable, indépendant du nom), posé à la
+    // création par preCreateRegion. On ne supprime JAMAIS une Region sur la seule foi de son nom :
+    // sinon une Region MJ légitime nommée « … [Nord] » serait effacée (perte de données).
+    const myId       = game.user.id;
+    const flagOwner  = (r) => r.flags?.[NS]?.owner; // id de l'auteur
+    const isTemplate = (r) => flagOwner(r) != null; // toute région marquée par le module
+    const isMine     = (r) => flagOwner(r) === myId;
 
     const ids = scene.regions
       .filter(r => game.user.isGM ? isTemplate(r) : isMine(r))

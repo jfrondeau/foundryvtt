@@ -49,6 +49,8 @@ export class FloatingBar {
     this.el = null;          // élément racine (aliasé this.bar / this.root dans les sous-classes)
     this.mirrorEl = null;    // clone miroir 180° (mode table) ; null si absent
     this.hookIds = {};
+    this._destroyed = false;  // vrai après destroy() : garde les rappels différés (debounce/setTimeout)
+    this._mirrorSyncScheduled = false;
     this.onResize = this.onResize.bind(this);
     FloatingBar.instances.add(this);
   }
@@ -136,7 +138,7 @@ export class FloatingBar {
    * relance la passe globale.
    */
   reflow() {
-    this.constrainSize();
+    // Le plafond de taille (constrainSize) est ré-appliqué globalement par layoutAll.
     FloatingBar.layoutAll();
   }
 
@@ -358,18 +360,22 @@ export class FloatingBar {
     if (FloatingBar._reflowing) return;
     FloatingBar._reflowing = true;
     try {
-      const bars = [...FloatingBar.instances].filter((b) => b.el && b.el.style.display !== "none");
+      const all = [...FloatingBar.instances].filter((b) => b.el);
+      const visible = all.filter((b) => b.el.style.display !== "none");
       const table = FloatingBar.tableMode();
 
-      // 1) classes d'ancrage + montage/démontage des miroirs.
-      for (const b of bars) { b._applyDockClasses(); b._syncMirrorMount(table); }
+      // 1) Plafond de taille + classes d'ancrage sur les barres visibles. La réconciliation des
+      //    miroirs porte sur TOUTES les barres : une barre masquée (display:none) doit démonter
+      //    son miroir (sinon il reste orphelin au coin opposé).
+      for (const b of visible) { b.constrainSize(); b._applyDockClasses(); }
+      for (const b of all) b._syncMirrorMount(table);
 
       // 2) barres libres : position mémorisée.
-      for (const b of bars) if (!b.isDocked()) b.applyPosition();
+      for (const b of visible) if (!b.isDocked()) b.applyPosition();
 
       // 3) barres ancrées : disposition le long des bords.
       const placements = [];
-      for (const b of bars) {
+      for (const b of visible) {
         if (!b.isDocked()) continue;
         b._ensureOrder();
         placements.push({ bar: b, edge: b.getEdge(), align: b.getAlign(), order: b.getOrder() });
@@ -377,7 +383,7 @@ export class FloatingBar {
       FloatingBar._positionEdges(placements);
 
       // 4) miroirs : réflexion exacte de la position finale du primaire (ancré ET libre).
-      if (table) for (const b of bars) if (b.mirrorEl) b._layoutMirror();
+      if (table) for (const b of visible) if (b.mirrorEl) b._layoutMirror();
     } finally {
       FloatingBar._reflowing = false;
     }
@@ -465,15 +471,28 @@ export class FloatingBar {
   _ensureMirror() {
     const m = this.el.cloneNode(true);
     m.classList.add("fb-mirror");
+    m.removeAttribute("id"); // évite un id dupliqué avec le primaire (getElementById / body > #id).
     document.body.appendChild(m);
     this.mirrorEl = m;
-    this._mirrorClick = (ev) => this._forwardMirrorEvent(ev);
-    m.addEventListener("click", this._mirrorClick);
-    // Toute mutation du primaire (rendus fréquents de combat/token) se reflète automatiquement.
-    this._mirrorMO = new MutationObserver(() => this._syncMirror());
-    this._mirrorMO.observe(this.el, { childList: true, subtree: true, attributes: true, characterData: true });
+    this._mirrorEvent = (ev) => this._forwardMirrorEvent(ev);
+    m.addEventListener("click", this._mirrorEvent);
+    m.addEventListener("contextmenu", this._mirrorEvent); // clic droit (réglages / fiche) aussi relayé.
+    // Toute mutation du primaire (rendus fréquents de combat/token) se reflète, mais on coalesce
+    // les rafales en une seule resynchro par frame (évite la tempête de reflow sur l'écran de table).
+    this._mirrorMO = new MutationObserver(() => this._scheduleMirrorSync());
+    this._mirrorMO.observe(this.el, { childList: true, subtree: true, attributes: true });
     this._syncMirror();
     return m;
+  }
+
+  /** Programme une resynchro du miroir au prochain frame (coalesce les rafales de mutations). */
+  _scheduleMirrorSync() {
+    if (this._mirrorSyncScheduled) return;
+    this._mirrorSyncScheduled = true;
+    requestAnimationFrame(() => {
+      this._mirrorSyncScheduled = false;
+      this._syncMirror();
+    });
   }
 
   /** Recopie contenu + classes + styles du primaire vers le miroir, puis le repositionne. */
@@ -482,7 +501,19 @@ export class FloatingBar {
     this.mirrorEl.className = `${this.el.className} fb-mirror`;
     this.mirrorEl.setAttribute("style", this.el.getAttribute("style") || "");
     this.mirrorEl.innerHTML = this.el.innerHTML;
+    this._copyMirrorFormState(); // value/checked/selected ne sont PAS sérialisés par innerHTML.
     this._layoutMirror();
+  }
+
+  /** Recopie l'état vivant des contrôles (value / checked) du primaire vers le miroir. */
+  _copyMirrorFormState() {
+    const src = this.el.querySelectorAll("input, select, textarea");
+    const dst = this.mirrorEl.querySelectorAll("input, select, textarea");
+    const n = Math.min(src.length, dst.length);
+    for (let i = 0; i < n; i++) {
+      dst[i].value = src[i].value;
+      if ("checked" in src[i]) dst[i].checked = src[i].checked;
+    }
   }
 
   /** Place le miroir au point symétrique de la position écran du primaire (rotation via CSS). */
@@ -504,7 +535,9 @@ export class FloatingBar {
     if (!node) return;
     ev.preventDefault();
     ev.stopPropagation();
-    node.click?.();
+    // Rejoue le MÊME type d'événement sur le nœud homologue du primaire (qui porte la logique).
+    if (ev.type === "contextmenu") node.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    else node.click?.();
   }
   /** Chemin d'index (suite de positions d'enfant) de `node` sous `root`, ou null. */
   _indexPath(node, root) {
@@ -528,8 +561,10 @@ export class FloatingBar {
   _destroyMirror() {
     this._mirrorMO?.disconnect();
     this._mirrorMO = null;
+    this._mirrorSyncScheduled = false;
     if (this.mirrorEl) {
-      this.mirrorEl.removeEventListener("click", this._mirrorClick);
+      this.mirrorEl.removeEventListener("click", this._mirrorEvent);
+      this.mirrorEl.removeEventListener("contextmenu", this._mirrorEvent);
       this.mirrorEl.remove();
       this.mirrorEl = null;
     }
@@ -663,6 +698,7 @@ export class FloatingBar {
 
   /** Désenregistre les hooks, retire l'écouteur de resize, supprime l'élément. */
   destroy() {
+    this._destroyed = true; // neutralise les rappels différés déjà en file (debounce / setTimeout).
     for (const [hook, id] of Object.entries(this.hookIds)) Hooks.off(hook, id);
     window.removeEventListener("resize", this.onResize);
     this._sidebarRO?.disconnect();

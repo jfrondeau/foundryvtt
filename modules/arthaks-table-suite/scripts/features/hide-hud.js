@@ -375,7 +375,10 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = !!HideHud.columnFor(audience.key)[item.key];
-    cb.addEventListener("change", () => HideHud.setCell(audience.key, item.key, cb.checked));
+    cb.addEventListener("change", async () => {
+      await HideHud.setCell(audience.key, item.key, cb.checked);
+      this.render(); // resynchronise les toggles « tout cocher » (états coché / indéterminé).
+    });
     c.appendChild(cb);
     return c;
   }

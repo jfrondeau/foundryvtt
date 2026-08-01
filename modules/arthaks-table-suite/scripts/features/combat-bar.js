@@ -61,8 +61,8 @@ export class CombatOverlay extends FloatingBar {
 
     const combat = game.combats?.active;
     if (!combat || !game.user.isGM) return false;
-    if (dir < 0) combat.previousTurn();
-    else combat.nextTurn();
+    const step = dir < 0 ? combat.previousTurn() : combat.nextTurn();
+    Promise.resolve(step).catch((err) => { notify.warn("Impossible de changer de tour."); console.error(err); });
     return true;
   }
 
@@ -137,6 +137,7 @@ export class CombatOverlay extends FloatingBar {
 
   // ── Décision d'affichage ────────────────────────────────────────────────
   _sync() {
+    if (this._destroyed) return; // le sync débouncé (30 ms) a pu survivre à un destroy().
     const combat = this.combat;
     const visible = combat?.combatants?.size ? this.visibleCombatants(combat).length > 0 : false;
 
@@ -144,7 +145,11 @@ export class CombatOverlay extends FloatingBar {
       this._lastTurnId = null;
       this._lastVisibleCurrentId = null;
       this.editMode = false;
-      if (this.root) this.root.style.display = "none";
+      if (this.root) {
+        this.root.style.display = "none";
+        // Libère la place pour les barres voisines et démonte le miroir (barre désormais cachée).
+        FloatingBar.layoutAll();
+      }
       return;
     }
 
@@ -379,8 +384,9 @@ export class CombatOverlay extends FloatingBar {
   renderCombatNav(combat) {
     const nav = document.createElement("div");
     nav.className = "co-nav co-collapsible";
-    nav.appendChild(this.makeBtn("fas fa-backward-step", "Tour précédent ( , )", () => combat.previousTurn()));
-    nav.appendChild(this.makeBtn("fas fa-forward-step", "Tour suivant ( . )", () => combat.nextTurn()));
+    const step = (fn) => () => Promise.resolve(fn()).catch((err) => { notify.warn("Impossible de changer de tour."); console.error(err); });
+    nav.appendChild(this.makeBtn("fas fa-backward-step", "Tour précédent ( , )", step(() => combat.previousTurn())));
+    nav.appendChild(this.makeBtn("fas fa-forward-step", "Tour suivant ( . )", step(() => combat.nextTurn())));
     return nav;
   }
 
@@ -692,7 +698,9 @@ export class CombatOverlay extends FloatingBar {
           ev.preventDefault();
           const value = input.value;
           input.value = "";
-          this.applyHpToVictims(value).finally(() => input.blur());
+          // Applique aux cibles AFFICHÉES (celles de ce rendu), pas à une résolution au vol qui
+          // aurait pu changer pendant la saisie (le panneau est gelé tant que le champ a le focus).
+          this.applyHpToVictims(value, victims).finally(() => input.blur());
         } else if (ev.key === "Escape") {
           input.value = "";
           input.blur();
@@ -711,13 +719,18 @@ export class CombatOverlay extends FloatingBar {
     card.classList.toggle("co-pc", !isNPC);
     card.classList.toggle("co-npc", isNPC);
 
-    // Mode SANS portraits : pas de pastille d'initiales, juste nom + CA/PV.
     if (this._showImages) {
       const img = document.createElement("img");
       img.className = "co-target-img";
       img.src = this.imgForToken(token, this._featuredImageMode);
       img.alt = token.name;
       card.appendChild(img);
+    } else {
+      // Mode SANS portraits : pastille d'initiales (réutilise le gabarit .co-target-face).
+      const face = document.createElement("div");
+      face.className = "co-target-img co-target-face";
+      face.textContent = this.initialsOf(token.name);
+      card.appendChild(face);
     }
 
     const name = document.createElement("div");
@@ -761,9 +774,11 @@ export class CombatOverlay extends FloatingBar {
   parseHpDelta(rawValue) {
     const raw = String(rawValue).trim();
     if (!raw) return null;
+    // Entier optionnellement signé UNIQUEMENT : rejette « 3.5 », « 1,000 », « 12x » que parseInt
+    // tronquait silencieusement en 3 / 1 / 12.
+    if (!/^[+-]?\d+$/.test(raw)) { notify.warn("Valeur PV invalide (ex : 8, +8, -8)."); return null; }
     const hasSign = raw.startsWith("+") || raw.startsWith("-");
-    const parsed = parseInt(raw, 10);
-    if (Number.isNaN(parsed)) { notify.warn("Valeur PV invalide (ex : 8, +8, -8)."); return null; }
+    const parsed = Number(raw);
     const delta = hasSign ? parsed : -Math.abs(parsed);
     return delta === 0 ? null : delta;
   }
@@ -807,10 +822,12 @@ export class CombatOverlay extends FloatingBar {
   }
 
   /** Applique une saisie PV partagée à toutes les victimes (AoE, champ ≥2 cibles). */
-  async applyHpToVictims(rawValue) {
+  async applyHpToVictims(rawValue, victims = null) {
     const delta = this.parseHpDelta(rawValue);
     if (delta === null) return;
-    const victims = this.resolveVictims();
+    // Cibles affichées si fournies (WYSIWYG), sinon résolution au vol. applyDeltaToToken ignore
+    // proprement une cible dont l'acteur a disparu entre-temps.
+    victims = victims ?? this.resolveVictims();
     if (!victims.length) { notify.warn("Aucune cible."); return; }
 
     const log = [];
