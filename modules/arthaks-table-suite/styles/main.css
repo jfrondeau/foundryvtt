@@ -597,6 +597,19 @@ body.ahh-chat-bare #sidebar-content #chat {
   background: transparent !important;
 }
 
+/* Menu d'édition du chat masqué (col.chatMenu) : #chat-message (prose-mirror) a une
+   hauteur figée (flex: 0 0 178px), donc masquer .menu-container libère 42px QUI VONT À
+   LA SAISIE, pas à la conversation. On laisse #chat-message se dimensionner à son
+   contenu → l'espace revient au log (.chat-scroll, en flex: 1). */
+/* La zone de saisie est positionnée hors flux dans le prose-mirror : height:auto sur
+   #chat-message retombe à 0 et la fait disparaître. On fixe donc une hauteur explicite
+   = l'ancienne (178px) moins la barre de menu retirée (~42px). Les pixels gagnés
+   reviennent au log (.chat-scroll, en flex: 1). Ajuste 8.5em au besoin. */
+body.ahh-chat-menu-hidden #chat-message {
+  flex: 0 0 auto !important;
+  height: 8.5em !important;
+}
+
 /* ── Panneau de masquage : matrice audience × élément ────────────────────────── */
 /* La fenêtre ne doit jamais dépasser l'écran : le contenu défile au besoin. */
 .ahh-hide-config .window-content {

@@ -63,14 +63,14 @@ export const HIDEABLE = [
   {
     group: "Interface",
     items: [
+      { key: "sidebar",       label: "Barre latérale entière",  selector: "#ui-right, #sidebar" },
       { key: "navigation",    label: "Navigation des scènes",   selector: "#navigation" },
       { key: "sceneControls", label: "Contrôles / outils",      selector: "#controls, #scene-controls" },
       { key: "logo",          label: "Logo Foundry",            selector: "#logo" },
       { key: "players",       label: "Panneau joueurs",         selector: "#players, #players-active" },
       { key: "hotbar",        label: "Barre de macros",         selector: "#hotbar" },
       { key: "chatInput",     label: "Saisie du chat",          selector: ".chat-form, #chat-message, #chat-controls" },
-      { key: "chatMenu",      label: "Menu d'édition du chat",  selector: ".editor-menu" },
-      { key: "sidebar",       label: "Barre latérale entière",  selector: "#ui-right, #sidebar" },
+      { key: "chatMenu",      label: "Barre d'édition du chat",  selector: "#chat-message > .menu-container" },
     ],
   },
   {
@@ -160,6 +160,9 @@ export class HideHud {
 
     style.textContent = selectors.length ? `${selectors.join(",\n")} { display: none !important; }` : "";
     document.body.classList.toggle("ahh-chat-bare", !!col.chatInput);
+    // Menu d'édition masqué : #chat-message a une hauteur figée ; sans cette classe
+    // (voir main.css) les pixels du menu iraient à la saisie, pas à la conversation.
+    document.body.classList.toggle("ahh-chat-menu-hidden", !!col.chatMenu);
   }
 
   /**
