@@ -129,13 +129,17 @@ export function registerSettings() {
     // Rend le panneau accessible depuis la barre elle-même (clic droit sur la
     // poignée → FloatingBar.openSettings), seul accès quand le HUD est masqué.
     cls.SettingsPanel = meta.panel;
+    // restricted:false → le bouton apparaît AUSSI dans les réglages des joueurs : ils
+    // personnalisent leur propre écran (réglages de portée client). Le panneau désactive
+    // de lui-même les réglages de portée monde côté joueur (settings-panel.js), donc rien
+    // de sensible n'est modifiable. Le masquage MJ (hideMenu), lui, reste restreint.
     game.settings.registerMenu(MODULE_ID, meta.menuKey, {
       name: meta.label,
       label: meta.label,
       hint: meta.hint,
       icon: meta.icon,
       type: meta.panel,
-      restricted: true,
+      restricted: false,
     });
   }
 
