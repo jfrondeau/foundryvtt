@@ -30,7 +30,7 @@
  */
 
 import { MODULE_ID } from "../const.js";
-import { makeNotify } from "../lib/common.js";
+import { makeNotify, t } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
 
 const notify = makeNotify("Combat");
@@ -62,7 +62,7 @@ export class CombatOverlay extends FloatingBar {
     const combat = game.combats?.active;
     if (!combat || !game.user.isGM) return false;
     const step = dir < 0 ? combat.previousTurn() : combat.nextTurn();
-    Promise.resolve(step).catch((err) => { notify.warn("Impossible de changer de tour."); console.error(err); });
+    Promise.resolve(step).catch((err) => { notify.warn(t("ATS.combat.turnChangeFail")); console.error(err); });
     return true;
   }
 
@@ -81,7 +81,7 @@ export class CombatOverlay extends FloatingBar {
       const token = canvas.tokens?.get(badge.dataset.tokenId);
       if (token) { inst.beginHpEdit(token, badge); return true; }
     }
-    notify.warn("Aucune cible : cible un token (T) ou sélectionne-le.");
+    notify.warn(t("ATS.combat.noTarget"));
     return false;
   }
 
@@ -104,7 +104,7 @@ export class CombatOverlay extends FloatingBar {
     this.registerHooks();
     this.attachViewportHandlers();
     this.sync();
-    notify.info("Overlay de combat prêt.");
+    notify.info(t("ATS.combat.ready"));
   }
 
   registerHooks() {
@@ -284,7 +284,7 @@ export class CombatOverlay extends FloatingBar {
     const header = document.createElement("div");
     header.className = "co-header";
 
-    header.appendChild(this.makeHandle("co-handle", "Glisser pour déplacer · clic droit : réglages"));
+    header.appendChild(this.makeHandle("co-handle", t("ATS.bar.handleTooltip")));
     header.appendChild(this.makeRotateButton("co-rotate"));
 
     // Pastille d'identité (visible seulement une fois la barre repliée).
@@ -292,13 +292,14 @@ export class CombatOverlay extends FloatingBar {
 
     const round = document.createElement("div");
     round.className = "co-round";
-    round.textContent = !started ? "Préparation" : (editing ? `Édition · Round ${combat.round}` : `Round ${combat.round}`);
+    round.textContent = !started ? t("ATS.combat.prep")
+      : (editing ? t("ATS.combat.editRound", { round: combat.round }) : t("ATS.combat.round", { round: combat.round }));
     header.appendChild(round);
 
     // Combat : bouton d'options ⋮ (bascule combat ↔ édition). Les boutons de tour
     // (précédent/suivant) sont sur leur propre ligne sous l'en-tête (renderCombatNav).
     if (game.user.isGM && started) {
-      const edit = this.makeBtn("fas fa-sliders", editing ? "Revenir au combat" : "Modifier l'initiative / options", () => this.toggleEdit());
+      const edit = this.makeBtn("fas fa-sliders", editing ? t("ATS.combat.backToCombat") : t("ATS.combat.editInit"), () => this.toggleEdit());
       edit.classList.toggle("co-active", editing);
       header.appendChild(edit);
     }
@@ -308,7 +309,7 @@ export class CombatOverlay extends FloatingBar {
     const toggle = document.createElement("div");
     toggle.className = "co-toggle fb-toggle";
     const collapsed = this.root.classList.contains("co-collapsed");
-    toggle.dataset.tooltip = collapsed ? "Ré-étendre" : "Minimiser";
+    toggle.dataset.tooltip = collapsed ? t("ATS.bar.expandShort") : t("ATS.bar.collapseShort");
     toggle.appendChild(document.createElement("i"));
     toggle.addEventListener("click", () => this.toggleCollapsed());
     header.appendChild(toggle);
@@ -362,13 +363,13 @@ export class CombatOverlay extends FloatingBar {
 
     const ctl = document.createElement("div");
     ctl.className = "co-ctl";
-    ctl.appendChild(this.makeBtn("fas fa-dice-d20", "Rouler l'init des monstres", () => combat.rollNPC()));
+    ctl.appendChild(this.makeBtn("fas fa-dice-d20", t("ATS.combat.rollNPC"), () => combat.rollNPC()));
     if (!combat.started) {
-      const start = this.makeBtn("fas fa-play", "Commencer le combat", () => combat.startCombat());
+      const start = this.makeBtn("fas fa-play", t("ATS.combat.start"), () => combat.startCombat());
       start.classList.add("co-btn-start");
       ctl.appendChild(start);
     } else {
-      const end = this.makeBtn("fas fa-flag-checkered", "Terminer le combat", () => this.endCombat(combat));
+      const end = this.makeBtn("fas fa-flag-checkered", t("ATS.combat.end"), () => this.endCombat(combat));
       end.classList.add("co-btn-end");
       ctl.appendChild(end);
     }
@@ -384,9 +385,9 @@ export class CombatOverlay extends FloatingBar {
   renderCombatNav(combat) {
     const nav = document.createElement("div");
     nav.className = "co-nav co-collapsible";
-    const step = (fn) => () => Promise.resolve(fn()).catch((err) => { notify.warn("Impossible de changer de tour."); console.error(err); });
-    nav.appendChild(this.makeBtn("fas fa-backward-step", "Tour précédent ( , )", step(() => combat.previousTurn())));
-    nav.appendChild(this.makeBtn("fas fa-forward-step", "Tour suivant ( . )", step(() => combat.nextTurn())));
+    const step = (fn) => () => Promise.resolve(fn()).catch((err) => { notify.warn(t("ATS.combat.turnChangeFail")); console.error(err); });
+    nav.appendChild(this.makeBtn("fas fa-backward-step", t("ATS.combat.prevTurn"), step(() => combat.previousTurn())));
+    nav.appendChild(this.makeBtn("fas fa-forward-step", t("ATS.combat.nextTurn"), step(() => combat.nextTurn())));
     return nav;
   }
 
@@ -675,7 +676,7 @@ export class CombatOverlay extends FloatingBar {
 
     const title = document.createElement("div");
     title.className = "co-targets-title";
-    title.innerHTML = `<i class="fas fa-crosshairs"></i> ${victims.length > 1 ? `Cibles (${victims.length})` : "Cible"}`;
+    title.innerHTML = `<i class="fas fa-crosshairs"></i> ${victims.length > 1 ? t("ATS.combat.targets", { count: victims.length }) : t("ATS.combat.target")}`;
     panel.appendChild(title);
 
     const list = document.createElement("div");
@@ -690,8 +691,8 @@ export class CombatOverlay extends FloatingBar {
       input.className = "co-hp-edit";
       input.type = "text";
       input.inputMode = "numeric";
-      input.placeholder = "Δ PV  ( / )";
-      input.dataset.tooltip = "8 = dégâts · +8 = soin · Entrée = toutes les cibles";
+      input.placeholder = t("ATS.combat.hpDeltaPlaceholder");
+      input.dataset.tooltip = t("ATS.combat.hpDeltaTooltip");
       input.addEventListener("click", (ev) => ev.stopPropagation());
       input.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter") {
@@ -750,7 +751,7 @@ export class CombatOverlay extends FloatingBar {
           if (s.key === "hp" && token.actor?.isOwner) {
             badge.classList.add("co-stat-editable");
             badge.dataset.tokenId = token.id;
-            badge.dataset.tooltip = "Clic : modifier les PV (8 = dégâts, +8 = soin)";
+            badge.dataset.tooltip = t("ATS.combat.hpBadgeTooltip");
             badge.addEventListener("click", (ev) => { ev.stopPropagation(); this.beginHpEdit(token, badge); });
           }
           meta.appendChild(badge);
@@ -776,7 +777,7 @@ export class CombatOverlay extends FloatingBar {
     if (!raw) return null;
     // Entier optionnellement signé UNIQUEMENT : rejette « 3.5 », « 1,000 », « 12x » que parseInt
     // tronquait silencieusement en 3 / 1 / 12.
-    if (!/^[+-]?\d+$/.test(raw)) { notify.warn("Valeur PV invalide (ex : 8, +8, -8)."); return null; }
+    if (!/^[+-]?\d+$/.test(raw)) { notify.warn(t("ATS.combat.hpInvalid")); return null; }
     const hasSign = raw.startsWith("+") || raw.startsWith("-");
     const parsed = Number(raw);
     const delta = hasSign ? parsed : -Math.abs(parsed);
@@ -790,9 +791,9 @@ export class CombatOverlay extends FloatingBar {
    */
   async applyDeltaToToken(token, delta) {
     const actor = token.actor;
-    if (!actor) { notify.warn(`"${token.name}" sans acteur, ignoré.`); return null; }
-    if (typeof actor.applyDamage !== "function") { notify.warn(`applyDamage indisponible sur "${token.name}".`); return null; }
-    if (!actor.isOwner) { notify.warn(`Pas de permission sur "${token.name}".`); return null; }
+    if (!actor) { notify.warn(t("ATS.combat.noActor", { name: token.name })); return null; }
+    if (typeof actor.applyDamage !== "function") { notify.warn(t("ATS.combat.applyDamageMissing", { name: token.name })); return null; }
+    if (!actor.isOwner) { notify.warn(t("ATS.combat.noPermission", { name: token.name })); return null; }
     const before = actor.system?.attributes?.hp?.value;
     try {
       await actor.applyDamage(-delta); // applyDamage : positif = dégâts.
@@ -805,7 +806,7 @@ export class CombatOverlay extends FloatingBar {
       else if (!dying && wasDead) await this.setDeadStatus(token, false);
       return { before, after, died };
     } catch (err) {
-      notify.warn(`Échec PV sur "${token.name}".`);
+      notify.warn(t("ATS.combat.hpFail", { name: token.name }));
       console.error(err);
       return null;
     }
@@ -817,8 +818,10 @@ export class CombatOverlay extends FloatingBar {
     if (delta === null) return;
     const res = await this.applyDeltaToToken(token, delta);
     if (!res) return;
-    notify.info(`${delta < 0 ? "💀 Dégâts" : "💚 Soin"} [${delta > 0 ? "+" : ""}${delta}] : ${token.name} ${res.before}→${res.after}`);
-    if (res.died) notify.warn(`☠️ Mort : ${token.name}`);
+    const label = delta < 0 ? t("ATS.combat.damage") : t("ATS.combat.heal");
+    const deltaStr = `${delta > 0 ? "+" : ""}${delta}`;
+    notify.info(t("ATS.combat.hpApplyOne", { label, delta: deltaStr, name: token.name, before: res.before, after: res.after }));
+    if (res.died) notify.warn(t("ATS.combat.death", { names: token.name }));
   }
 
   /** Applique une saisie PV partagée à toutes les victimes (AoE, champ ≥2 cibles). */
@@ -828,7 +831,7 @@ export class CombatOverlay extends FloatingBar {
     // Cibles affichées si fournies (WYSIWYG), sinon résolution au vol. applyDeltaToToken ignore
     // proprement une cible dont l'acteur a disparu entre-temps.
     victims = victims ?? this.resolveVictims();
-    if (!victims.length) { notify.warn("Aucune cible."); return; }
+    if (!victims.length) { notify.warn(t("ATS.combat.noTargetShort")); return; }
 
     const log = [];
     const dead = [];
@@ -838,8 +841,10 @@ export class CombatOverlay extends FloatingBar {
       log.push(`${token.name}: ${res.before}→${res.after}`);
       if (res.died) dead.push(token.name);
     }
-    if (log.length) notify.info(`${delta < 0 ? "💀 Dégâts" : "💚 Soin"} [${delta > 0 ? "+" : ""}${delta}] : ${log.join(" | ")}`);
-    if (dead.length) notify.warn(`☠️ Mort : ${dead.join(", ")}`);
+    const label = delta < 0 ? t("ATS.combat.damage") : t("ATS.combat.heal");
+    const deltaStr = `${delta > 0 ? "+" : ""}${delta}`;
+    if (log.length) notify.info(t("ATS.combat.hpApplyMany", { label, delta: deltaStr, log: log.join(" | ") }));
+    if (dead.length) notify.warn(t("ATS.combat.death", { names: dead.join(", ") }));
   }
 
   /**
@@ -854,8 +859,8 @@ export class CombatOverlay extends FloatingBar {
     input.className = "co-hp-edit co-hp-inline";
     input.type = "text";
     input.inputMode = "numeric";
-    input.placeholder = "±PV";
-    input.dataset.tooltip = "8 = dégâts · +8 = soin · Entrée pour appliquer";
+    input.placeholder = t("ATS.combat.hpInlinePlaceholder");
+    input.dataset.tooltip = t("ATS.combat.hpInlineTooltip");
     input.addEventListener("click", (ev) => ev.stopPropagation());
     input.addEventListener("blur", () => { badge.innerHTML = original; }, { once: true });
     input.addEventListener("keydown", (ev) => {
@@ -919,7 +924,7 @@ export class CombatOverlay extends FloatingBar {
       input.type = "number";
       input.value = hasInit ? c.initiative : "";
       input.placeholder = "–";
-      input.dataset.tooltip = "Initiative (Entrée pour valider)";
+      input.dataset.tooltip = t("ATS.combat.initTooltip");
       input.addEventListener("click", (ev) => ev.stopPropagation());
       input.addEventListener("change", () => this.setInit(c, input.value));
       input.addEventListener("keydown", (ev) => {
@@ -986,8 +991,8 @@ export class CombatOverlay extends FloatingBar {
   /** Termine et clôture le combat après confirmation (MJ). */
   async endCombat(combat) {
     const ok = await foundry.applications.api.DialogV2.confirm({
-      window: { title: "Terminer le combat" },
-      content: "<p>Terminer et clôturer ce combat ?</p>",
+      window: { title: t("ATS.combat.end") },
+      content: `<p>${t("ATS.combat.endConfirm")}</p>`,
       rejectClose: false,
       modal: true,
     });
@@ -995,7 +1000,7 @@ export class CombatOverlay extends FloatingBar {
     try {
       await combat.delete();
     } catch (err) {
-      notify.warn("Impossible de terminer le combat.");
+      notify.warn(t("ATS.combat.endFail"));
       console.error(err);
     }
   }
@@ -1003,11 +1008,11 @@ export class CombatOverlay extends FloatingBar {
   async setInit(c, value) {
     const trimmed = String(value).trim();
     const num = trimmed === "" ? null : Number(trimmed);
-    if (num !== null && Number.isNaN(num)) { notify.warn("Initiative invalide."); return; }
+    if (num !== null && Number.isNaN(num)) { notify.warn(t("ATS.combat.initInvalid")); return; }
     try {
       await c.update({ initiative: num });
     } catch (err) {
-      notify.warn("Impossible de modifier l'initiative.");
+      notify.warn(t("ATS.combat.initFail"));
       console.error(err);
     }
   }
@@ -1067,7 +1072,7 @@ export class CombatOverlay extends FloatingBar {
     const icon = this.root?.querySelector(".co-toggle i");
     if (icon) icon.className = this.collapseChevronClass();
     const toggle = this.root?.querySelector(".co-toggle");
-    if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre" : "Minimiser";
+    if (toggle) toggle.dataset.tooltip = on ? t("ATS.bar.expandShort") : t("ATS.bar.collapseShort");
   }
 
   // Position : héritée de FloatingBar ; seul le défaut change (coin haut-gauche).

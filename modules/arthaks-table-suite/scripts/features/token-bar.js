@@ -26,7 +26,7 @@
  */
 
 import { MODULE_ID } from "../const.js";
-import { makeNotify } from "../lib/common.js";
+import { makeNotify, t } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
 
 const BAR_ID = "selected-token-actions";
@@ -195,13 +195,13 @@ function buildSections(actor) {
   // Inventaire : armes (équipées par défaut).
   if (CFG.includeInventory) {
     const items = dedupeByName(actor.items.filter(isWeapon)).sort(byName);
-    if (items.length) sections.push({ label: "Armes", cssClass: null, items });
+    if (items.length) sections.push({ label: t("ATS.token.weapons"), cssClass: null, items });
   }
 
   // Features actionnables (badge de charges sur les boutons).
   if (CFG.includeFeatures) {
     const items = dedupeByName(actor.items.filter(isFeature)).sort(byReminderThenName);
-    if (items.length) sections.push({ label: "Features", cssClass: "ab-feature", items });
+    if (items.length) sections.push({ label: t("ATS.token.features"), cssClass: "ab-feature", items });
   }
 
   // Sorts : cantrips à part, puis un groupe par niveau (avec slots restants/total).
@@ -217,14 +217,14 @@ function buildSections(actor) {
     const prep = (lvl) => dedupeByName(byLevel.get(lvl) ?? []).sort(byName);
 
     const cantrips = prep(0);
-    if (cantrips.length) sections.push({ label: "Cantrips", cssClass: "ab-cantrip", items: cantrips });
+    if (cantrips.length) sections.push({ label: t("ATS.token.cantrips"), cssClass: "ab-cantrip", items: cantrips });
 
     for (let lvl = 1; lvl <= 9; lvl++) {
       const items = prep(lvl);
       if (!items.length) continue;
       const slot = actor.system?.spells?.[`spell${lvl}`];
       const slotText = (slot && Number(slot.max) > 0) ? `${slot.value ?? 0}/${slot.max}` : "";
-      sections.push({ label: `N${lvl}`, cssClass: "ab-spell", items, slotText });
+      sections.push({ label: t("ATS.token.spellLevel", { level: lvl }), cssClass: "ab-spell", items, slotText });
     }
   }
 
@@ -241,7 +241,7 @@ export class TokenActionBar extends FloatingBar {
   static start() {
     if (this.instance) return;
     if (game.system.id !== "dnd5e") {
-      notify.warn(`Cette fonctionnalité cible le système dnd5e (système actuel : ${game.system.id}).`);
+      notify.warn(t("ATS.token.wrongSystem", { system: game.system.id }));
     }
     this.instance = new this();
     this.instance.init();
@@ -265,7 +265,7 @@ export class TokenActionBar extends FloatingBar {
     this.registerHooks();
     this.attachViewportHandlers();
     this.render();
-    notify.info("Barre d'action prête.");
+    notify.info(t("ATS.token.ready"));
   }
 
   registerHooks() {
@@ -376,7 +376,7 @@ export class TokenActionBar extends FloatingBar {
           const slot = document.createElement("span");
           slot.className = "ab-slot";
           slot.textContent = section.slotText;
-          slot.dataset.tooltip = "Emplacements restants / total à ce niveau";
+          slot.dataset.tooltip = t("ATS.token.slotTooltip");
           head.appendChild(slot);
         }
         block.appendChild(head);
@@ -393,7 +393,7 @@ export class TokenActionBar extends FloatingBar {
     if (!wrap.childElementCount) {
       const empty = document.createElement("div");
       empty.className = "ab-empty";
-      empty.textContent = "Aucune action disponible.";
+      empty.textContent = t("ATS.token.empty");
       wrap.appendChild(empty);
     }
     this.bar.appendChild(wrap);
@@ -403,7 +403,7 @@ export class TokenActionBar extends FloatingBar {
     const collapsed = localStorage.getItem(this.collapsedKey) === "1";
     const toggle = document.createElement("div");
     toggle.className = "ab-toggle fb-toggle";
-    toggle.dataset.tooltip = collapsed ? "Ré-étendre la barre" : "Minimiser la barre";
+    toggle.dataset.tooltip = collapsed ? t("ATS.bar.expand") : t("ATS.bar.collapse");
     toggle.appendChild(document.createElement("i"));
     toggle.addEventListener("click", () => this.toggleCollapsed());
     this.bar.appendChild(toggle);
@@ -439,7 +439,7 @@ export class TokenActionBar extends FloatingBar {
       // use() est asynchrone : on capte un rejet (plus d'emplacement, activité annulée…) pour
       // éviter une « unhandled rejection » muette et prévenir l'utilisateur.
       Promise.resolve(item.use?.({}, { event: ev })).catch((err) => {
-        notify.warn(`Impossible d'utiliser « ${item.name} ».`);
+        notify.warn(t("ATS.token.useFail", { name: item.name }));
         console.error(err);
       });
     });
@@ -457,7 +457,7 @@ export class TokenActionBar extends FloatingBar {
     const icon = this.bar?.querySelector(".ab-toggle i");
     if (icon) icon.className = this.collapseChevronClass();
     const toggle = this.bar?.querySelector(".ab-toggle");
-    if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
+    if (toggle) toggle.dataset.tooltip = on ? t("ATS.bar.expand") : t("ATS.bar.collapse");
   }
 
   // ── Position / ancrage ─────────────────────────────────────────────────────

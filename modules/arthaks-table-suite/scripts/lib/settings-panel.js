@@ -11,6 +11,7 @@
  * `config: false` pour ne plus apparaître dans la liste principale.
  */
 import { MODULE_ID } from "../const.js";
+import { t } from "./common.js";
 
 export class SettingsPanel extends foundry.applications.api.ApplicationV2 {
   /** Clés de réglages (sans namespace) présentées par ce panneau. Surchargé par sous-classe. */
@@ -43,7 +44,10 @@ export class SettingsPanel extends foundry.applications.api.ApplicationV2 {
     group.className = "form-group";
 
     const label = document.createElement("label");
-    label.textContent = cfg.name ?? key;
+    // Ce panneau court-circuite la localisation auto de Foundry (il lit cfg directement) :
+    // on localise donc nous-mêmes name/hint/choices. t() renvoie la chaîne inchangée si la
+    // clé est absente, donc sans danger même pour un libellé déjà en clair.
+    label.textContent = t(cfg.name ?? key);
 
     const fields = document.createElement("div");
     fields.className = "form-fields";
@@ -59,7 +63,7 @@ export class SettingsPanel extends foundry.applications.api.ApplicationV2 {
     if (cfg.hint) {
       const notes = document.createElement("p");
       notes.className = "notes";
-      notes.textContent = gmOnly ? `${cfg.hint} (réglage réservé au MJ)` : cfg.hint;
+      notes.textContent = gmOnly ? `${t(cfg.hint)} ${t("ATS.settings.gmOnlySuffix")}` : t(cfg.hint);
       group.appendChild(notes);
     }
     return group;
@@ -79,7 +83,7 @@ export class SettingsPanel extends foundry.applications.api.ApplicationV2 {
       for (const [val, lbl] of Object.entries(cfg.choices)) {
         const opt = document.createElement("option");
         opt.value = val;
-        opt.textContent = lbl;
+        opt.textContent = t(lbl);
         if (val === value) opt.selected = true;
         sel.appendChild(opt);
       }

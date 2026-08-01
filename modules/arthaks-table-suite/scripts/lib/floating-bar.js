@@ -16,6 +16,7 @@
  * l'une par-dessus l'autre. Voir `layoutAll`.
  */
 import { MODULE_ID } from "../const.js";
+import { t } from "./common.js";
 
 export class FloatingBar {
   /**
@@ -628,7 +629,7 @@ export class FloatingBar {
    * est le seul accès aux réglages quand le HUD joueur est masqué (les panneaux par
    * barre y sont ouverts programmatiquement, contournant le menu natif restreint).
    */
-  makeHandle(className, tooltip = "Glisser pour déplacer · clic droit : réglages") {
+  makeHandle(className, tooltip = t("ATS.bar.handleTooltip")) {
     const handle = document.createElement("i");
     handle.className = `fas fa-grip-vertical fb-handle ${className}`;
     handle.dataset.tooltip = tooltip;
@@ -660,7 +661,7 @@ export class FloatingBar {
   makeRotateButton(className) {
     const btn = document.createElement("i");
     btn.className = `fas fa-rotate fb-rotate ${className}`;
-    btn.dataset.tooltip = "Pivoter la barre (horizontale / verticale)";
+    btn.dataset.tooltip = t("ATS.bar.rotateTooltip");
     // pointerdown stoppé pour ne pas amorcer un glisser depuis une poignée voisine.
     btn.addEventListener("pointerdown", (ev) => ev.stopPropagation());
     btn.addEventListener("click", (ev) => { ev.preventDefault(); this.toggleOrientation(); });

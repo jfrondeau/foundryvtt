@@ -21,15 +21,16 @@
 import { MODULE_ID } from "../const.js";
 import { BARS } from "./registry.js";
 import { FloatingBar } from "../lib/floating-bar.js";
+import { t } from "../lib/common.js";
 
 /**
  * Les trois audiences, dans l'ordre d'affichage des colonnes du panneau.
  * @type {{ key: string, label: string, icon: string }[]}
  */
 export const AUDIENCES = [
-  { key: "gm",     label: "MJ",             icon: "fa-solid fa-dungeon" },
-  { key: "tv",     label: "TV",             icon: "fa-solid fa-tv" },
-  { key: "others", label: "Autres joueurs", icon: "fa-solid fa-users" },
+  { key: "gm",     label: "ATS.hide.audience.gm",     icon: "fa-solid fa-dungeon" },
+  { key: "tv",     label: "ATS.hide.audience.tv",     icon: "fa-solid fa-tv" },
+  { key: "others", label: "ATS.hide.audience.others", icon: "fa-solid fa-users" },
 ];
 
 /**
@@ -39,18 +40,18 @@ export const AUDIENCES = [
  * @type {{ tab: string, label: string }[]}
  */
 const SIDEBAR_TABS = [
-  { tab: "combat",       label: "Combats" },
-  { tab: "scenes",       label: "Scènes" },
-  { tab: "placeables",   label: "Éléments placés" },
-  { tab: "actors",       label: "Acteurs" },
-  { tab: "items",        label: "Objets" },
-  { tab: "journal",      label: "Journal" },
-  { tab: "tables",       label: "Tables aléatoires" },
-  { tab: "cards",        label: "Cartes" },
-  { tab: "macros",       label: "Macros" },
-  { tab: "playlists",    label: "Playlists" },
-  { tab: "compendium",   label: "Compendiums" },
-  { tab: "dice-so-nice", label: "Dice So Nice" },
+  { tab: "combat",       label: "ATS.hide.tab.combat" },
+  { tab: "scenes",       label: "ATS.hide.tab.scenes" },
+  { tab: "placeables",   label: "ATS.hide.tab.placeables" },
+  { tab: "actors",       label: "ATS.hide.tab.actors" },
+  { tab: "items",        label: "ATS.hide.tab.items" },
+  { tab: "journal",      label: "ATS.hide.tab.journal" },
+  { tab: "tables",       label: "ATS.hide.tab.tables" },
+  { tab: "cards",        label: "ATS.hide.tab.cards" },
+  { tab: "macros",       label: "ATS.hide.tab.macros" },
+  { tab: "playlists",    label: "ATS.hide.tab.playlists" },
+  { tab: "compendium",   label: "ATS.hide.tab.compendium" },
+  { tab: "dice-so-nice", label: "ATS.hide.tab.dice-so-nice" },
 ];
 
 /**
@@ -61,20 +62,20 @@ const SIDEBAR_TABS = [
  */
 export const HIDEABLE = [
   {
-    group: "Interface",
+    group: "ATS.hide.group.interface",
     items: [
-      { key: "sidebar",       label: "Barre latérale entière",  selector: "#ui-right, #sidebar" },
-      { key: "navigation",    label: "Navigation des scènes",   selector: "#navigation" },
-      { key: "sceneControls", label: "Contrôles / outils",      selector: "#controls, #scene-controls" },
-      { key: "logo",          label: "Logo Foundry",            selector: "#logo" },
-      { key: "players",       label: "Panneau joueurs",         selector: "#players, #players-active" },
-      { key: "hotbar",        label: "Barre de macros",         selector: "#hotbar" },
-      { key: "chatInput",     label: "Saisie du chat",          selector: ".chat-form, #chat-message, #chat-controls" },
-      { key: "chatMenu",      label: "Barre d'édition du chat",  selector: "#chat-message > .menu-container" },
+      { key: "sidebar",       label: "ATS.hide.item.sidebar",       selector: "#ui-right, #sidebar" },
+      { key: "navigation",    label: "ATS.hide.item.navigation",    selector: "#navigation" },
+      { key: "sceneControls", label: "ATS.hide.item.sceneControls", selector: "#controls, #scene-controls" },
+      { key: "logo",          label: "ATS.hide.item.logo",          selector: "#logo" },
+      { key: "players",       label: "ATS.hide.item.players",       selector: "#players, #players-active" },
+      { key: "hotbar",        label: "ATS.hide.item.hotbar",        selector: "#hotbar" },
+      { key: "chatInput",     label: "ATS.hide.item.chatInput",     selector: ".chat-form, #chat-message, #chat-controls" },
+      { key: "chatMenu",      label: "ATS.hide.item.chatMenu",      selector: "#chat-message > .menu-container" },
     ],
   },
   {
-    group: "Onglets de la sidebar",
+    group: "ATS.hide.group.tabs",
     items: SIDEBAR_TABS.map(({ tab, label }) => ({
       key: `tab-${tab}`,
       label,
@@ -82,7 +83,7 @@ export const HIDEABLE = [
     })),
   },
   {
-    group: "Barres du module",
+    group: "ATS.hide.group.bars",
     items: BARS.map((b) => ({ key: `bar-${b.barKey}`, label: b.label, bar: b.barKey })),
   },
 ];
@@ -229,7 +230,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
   static DEFAULT_OPTIONS = {
     id: "ahh-hide-config",
     classes: ["ahh-hide-config"],
-    window: { title: "Masquage · Interface, onglets et barres", icon: "fa-solid fa-eye-slash" },
+    window: { title: "ATS.menu.hide.name", icon: "fa-solid fa-eye-slash" },
     position: { width: 620, height: "auto" },
   };
 
@@ -253,9 +254,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
 
     const hint = document.createElement("p");
     hint.className = "notes";
-    hint.textContent =
-      "Coche ce que tu veux MASQUER, par audience. MJ = ton écran ; TV = l'écran de table " +
-      "(joueur désigné ci-dessous) ; Autres = les autres joueurs. Appliqué en direct.";
+    hint.textContent = t("ATS.hide.hint");
     root.appendChild(hint);
 
     root.appendChild(this._buildTvSelector());
@@ -269,18 +268,18 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
     grid.appendChild(this._cell("ahh-hide-corner"));
     for (const a of AUDIENCES) {
       const h = this._cell("ahh-hide-head");
-      h.innerHTML = `<i class="${a.icon}"></i><span>${a.label}</span>`;
+      h.innerHTML = `<i class="${a.icon}"></i><span>${t(a.label)}</span>`;
       grid.appendChild(h);
     }
 
     for (const group of HIDEABLE) {
       // Ligne d'en-tête de section : nom + un toggle « tout » par audience.
-      grid.appendChild(this._cell("ahh-hide-legend", group.group));
+      grid.appendChild(this._cell("ahh-hide-legend", t(group.group)));
       for (const a of AUDIENCES) grid.appendChild(this._buildGroupToggle(a, group));
 
       // Une ligne par élément masquable.
       for (const item of group.items) {
-        grid.appendChild(this._cell("ahh-hide-label", item.label));
+        grid.appendChild(this._cell("ahh-hide-label", t(item.label)));
         for (const a of AUDIENCES) grid.appendChild(this._buildCellToggle(a, item));
       }
     }
@@ -289,7 +288,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
     footer.className = "ahh-hide-footer";
     const reset = document.createElement("button");
     reset.type = "button";
-    reset.innerHTML = `<i class="fa-solid fa-rotate-left"></i> Rétablir les valeurs par défaut`;
+    reset.innerHTML = `<i class="fa-solid fa-rotate-left"></i> ${t("ATS.hide.reset")}`;
     reset.addEventListener("click", async () => { await HideHud.resetDefaults(); this.render(); });
     footer.appendChild(reset);
     root.appendChild(footer);
@@ -304,7 +303,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
 
     const label = document.createElement("label");
     label.htmlFor = "ahh-tv-user";
-    label.innerHTML = `<i class="fa-solid fa-tv"></i> Écran de table (joueur TV)`;
+    label.innerHTML = `<i class="fa-solid fa-tv"></i> ${t("ATS.hide.tvLabel")}`;
 
     const select = document.createElement("select");
     select.id = "ahh-tv-user";
@@ -312,7 +311,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
 
     const none = document.createElement("option");
     none.value = "";
-    none.textContent = "— Aucun —";
+    none.textContent = t("ATS.hide.none");
     none.selected = current === "";
     select.appendChild(none);
 
@@ -343,7 +342,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
     cb.addEventListener("change", () => game.settings.set(MODULE_ID, "tableMode", cb.checked));
 
     const span = document.createElement("span");
-    span.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Mode table (copie miroir 180° sur l'écran TV)`;
+    span.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> ${t("ATS.hide.mirror")}`;
 
     row.append(cb, span);
     return row;
@@ -357,7 +356,7 @@ export class HideConfig extends foundry.applications.api.ApplicationV2 {
     const c = this._cell("ahh-hide-legend-toggle");
     const cb = document.createElement("input");
     cb.type = "checkbox";
-    cb.title = "Tout cocher / décocher cette catégorie";
+    cb.title = t("ATS.hide.groupToggle");
 
     const col = HideHud.columnFor(audience.key);
     const checked = group.items.filter((it) => col[it.key]).length;

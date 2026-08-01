@@ -24,20 +24,21 @@
  */
 
 import { MODULE_ID } from "../const.js";
-import { makeNotify } from "../lib/common.js";
+import { makeNotify, t } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
 
 const NS = MODULE_ID;                     // namespace des flags de Region (owner)
 const notify = makeNotify("Gabarits");
 
 // ── Formes disponibles (noms des outils du contrôle « regions » de dnd5e) ─────
+// `label` est une clé i18n, localisée au point d'affichage.
 const SHAPES = [
-  { t: "circle",    icon: "fa-circle",           label: "Cercle" },
-  { t: "cone",      icon: "fa-location-arrow",    label: "Cône" },
-  { t: "ring",      icon: "fa-circle-notch",      label: "Anneau" },
-  { t: "line",      icon: "fa-grip-lines",        label: "Ligne" },
-  { t: "emanation", icon: "fa-arrows-to-circle",  label: "Émanation" },
-  { t: "rectangle", icon: "fa-square",            label: "Rectangle" },
+  { t: "circle",    icon: "fa-circle",           label: "ATS.template.shape.circle" },
+  { t: "cone",      icon: "fa-location-arrow",    label: "ATS.template.shape.cone" },
+  { t: "ring",      icon: "fa-circle-notch",      label: "ATS.template.shape.ring" },
+  { t: "line",      icon: "fa-grip-lines",        label: "ATS.template.shape.line" },
+  { t: "emanation", icon: "fa-arrows-to-circle",  label: "ATS.template.shape.emanation" },
+  { t: "rectangle", icon: "fa-square",            label: "ATS.template.shape.rectangle" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -51,8 +52,7 @@ export class SpellTemplateBar extends FloatingBar {
     if (this.instance) return;
     // Garde : le contrôle « regions » + « templateMode » doivent exister.
     if (!ui.controls.controls?.regions?.tools?.templateMode) {
-      notify.warn("Le mode gabarit (Regions → templateMode) est introuvable. " +
-                  "Cette fonctionnalité nécessite dnd5e 5.x sur Foundry v13+.");
+      notify.warn(t("ATS.template.modeMissing"));
     }
     this.instance = new this();
     this.instance.render();
@@ -87,7 +87,7 @@ export class SpellTemplateBar extends FloatingBar {
     // Libellé (repliable).
     const label = document.createElement("div");
     label.className = "tb-label tb-collapsible";
-    label.textContent = "Gabarits";
+    label.textContent = t("ATS.template.label");
     bar.appendChild(label);
 
     // Boutons de forme (repliables).
@@ -95,7 +95,7 @@ export class SpellTemplateBar extends FloatingBar {
       const btn = document.createElement("div");
       btn.className = "tb-btn tb-collapsible";
       btn.dataset.shape = shape.t;
-      btn.dataset.tooltip = `${shape.label} — clic-glisser pour dimensionner`;
+      btn.dataset.tooltip = t("ATS.template.shapeTooltip", { shape: t(shape.label) });
       const i = document.createElement("i");
       i.className = this.shapeIcon(shape);
       btn.appendChild(i);
@@ -111,8 +111,8 @@ export class SpellTemplateBar extends FloatingBar {
     const trash = document.createElement("div");
     trash.className = "tb-btn tb-trash tb-collapsible";
     trash.dataset.tooltip = game.user.isGM
-      ? "Supprimer tous les gabarits (MJ)"
-      : "Supprimer mes gabarits";
+      ? t("ATS.template.trashAll")
+      : t("ATS.template.trashMine");
     const trashIcon = document.createElement("i");
     trashIcon.className = "fas fa-trash";
     trash.appendChild(trashIcon);
@@ -123,7 +123,7 @@ export class SpellTemplateBar extends FloatingBar {
     // updateCollapseIcon selon l'orientation et l'état.
     const toggle = document.createElement("div");
     toggle.className = "tb-toggle fb-toggle";
-    toggle.dataset.tooltip = "Minimiser la barre";
+    toggle.dataset.tooltip = t("ATS.bar.collapse");
     toggle.appendChild(document.createElement("i"));
     toggle.addEventListener("click", () => this.toggleCollapsed());
     this.toggleIcon = toggle;
@@ -139,7 +139,7 @@ export class SpellTemplateBar extends FloatingBar {
     this.attachViewportHandlers();
     this.registerHooks();
     this.refreshEmanationState();
-    notify.info("Barre de gabarits prête.");
+    notify.info(t("ATS.template.ready"));
   }
 
   /** Icône du bouton : reprend celle de l'outil du contrôle « Regions » de dnd5e. */
@@ -163,8 +163,8 @@ export class SpellTemplateBar extends FloatingBar {
     const ready = canvas.tokens?.controlled?.length === 1;
     btn.classList.toggle("tb-disabled", !ready);
     btn.dataset.tooltip = ready
-      ? "Émanation — attachée au token sélectionné"
-      : "Émanation — sélectionner d'abord un token";
+      ? t("ATS.template.emanationReady")
+      : t("ATS.template.emanationNeedToken");
   }
 
   applyButtonSize() {
@@ -183,7 +183,7 @@ export class SpellTemplateBar extends FloatingBar {
   updateCollapseIcon(on) {
     const icon = this.toggleIcon?.querySelector("i");
     if (icon) icon.className = this.collapseChevronClass();
-    if (this.toggleIcon) this.toggleIcon.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
+    if (this.toggleIcon) this.toggleIcon.dataset.tooltip = on ? t("ATS.bar.expand") : t("ATS.bar.collapse");
   }
 
   // ── Activation du mode gabarit ─────────────────────────────────────────────
@@ -196,14 +196,14 @@ export class SpellTemplateBar extends FloatingBar {
     if (shape === "emanation") {
       const controlled = canvas.tokens.controlled;
       if (controlled.length !== 1) {
-        notify.warn("Sélectionner exactement UN token pour attacher l'émanation.");
+        notify.warn(t("ATS.template.emanationPickOne"));
         return;
       }
       this.emanationTokenId = controlled[0].id;
     }
 
     const regions = ui.controls.controls?.regions;
-    if (!regions) { notify.warn("Contrôle « Regions » indisponible sur cette scène."); return; }
+    if (!regions) { notify.warn(t("ATS.template.regionsUnavailable")); return; }
 
     const current = canvas.activeLayer;
     if (current && current !== canvas.regions) this.returnLayer = current;
@@ -224,7 +224,7 @@ export class SpellTemplateBar extends FloatingBar {
       await ui.controls.activate({ control: "regions", tool: shape });
       ui.controls.render();
     } catch (err) {
-      notify.warn("Impossible d'activer le mode gabarit.");
+      notify.warn(t("ATS.template.activateFail"));
       console.error(err);
       return;
     }
@@ -264,14 +264,14 @@ export class SpellTemplateBar extends FloatingBar {
       .map(r => r.id);
 
     if (!ids.length) {
-      ui.notifications.info("Aucun gabarit à supprimer.");
+      ui.notifications.info(t("ATS.template.nothingToDelete"));
       return;
     }
     try {
       await scene.deleteEmbeddedDocuments("Region", ids);
-      ui.notifications.info(`${ids.length} gabarit(s) supprimé(s).`);
+      ui.notifications.info(t("ATS.template.deleted", { count: ids.length }));
     } catch (err) {
-      notify.warn("Suppression impossible.");
+      notify.warn(t("ATS.template.deleteFail"));
       console.error(err);
     }
   }
@@ -310,7 +310,7 @@ export class SpellTemplateBar extends FloatingBar {
       // cliquée sur la barre, et on n'utilise activeTool que s'il désigne une forme.
       const activeTool = ui.controls.control?.activeTool;
       const toolName = SHAPES.some(s => s.t === activeTool) ? activeTool : this.lastShape;
-      const label = SHAPES.find(s => s.t === toolName)?.label ?? "Gabarit";
+      const label = t(SHAPES.find(s => s.t === toolName)?.label ?? "ATS.template.shape.generic");
 
       const update = {
         name: `${label} [${game.user.name}]`,

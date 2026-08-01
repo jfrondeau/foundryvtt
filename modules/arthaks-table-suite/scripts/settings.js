@@ -6,6 +6,10 @@
  * réglages PROPRES à chaque barre sont enregistrés en `config: false` et présentés dans un
  * panneau dédié (bouton « Configurer… » via registerMenu), pour garder la page de
  * configuration native courte et lisible.
+ *
+ * i18n : toutes les chaînes visibles sont des CLÉS (namespace « ATS. », cf. lang/*.json).
+ * Foundry localise automatiquement les `name`/`hint`/`label` des réglages, menus et
+ * keybindings, ainsi que les valeurs de `choices` et le `window.title` des panneaux.
  */
 import { MODULE_ID } from "./const.js";
 import { BARS } from "./features/registry.js";
@@ -20,18 +24,21 @@ import { FloatingBar } from "./lib/floating-bar.js";
  * Bord d'ancrage des barres flottantes : « Libre » (glisser-déposer, position
  * continue mémorisée) ou un bord de l'écran. L'orientation est INDÉPENDANTE du bord
  * (réglage séparé + bouton ↻) ; la position le long du bord est continue et posée au
- * glisser. Voir FloatingBar.applyDock.
+ * glisser. Voir FloatingBar.applyDock. (Valeurs = clés i18n, localisées par Foundry.)
  */
 const EDGE_CHOICES = {
-  free: "Libre (glisser-déposer)",
-  top: "Bord haut",
-  bottom: "Bord bas",
-  left: "Bord gauche",
-  right: "Bord droit",
+  free: "ATS.choices.edge.free",
+  top: "ATS.choices.edge.top",
+  bottom: "ATS.choices.edge.bottom",
+  left: "ATS.choices.edge.left",
+  right: "ATS.choices.edge.right",
 };
 
 /** Orientation de la barre, indépendante du bord (bascule aussi via le bouton ↻). */
-const ORIENT_CHOICES = { h: "Horizontale", v: "Verticale" };
+const ORIENT_CHOICES = { h: "ATS.choices.orient.h", v: "ATS.choices.orient.v" };
+
+/** Choix d'image commun aux réglages imageMode / featuredImageMode. */
+const IMAGE_CHOICES = { actor: "ATS.choices.image.actor", token: "ATS.choices.image.token" };
 
 // ── Panneaux de configuration par barre (bouton « Configurer… ») ──────────────
 // Chaque panneau présente les clés listées, dans cet ordre. Les réglages restent
@@ -40,12 +47,12 @@ const ORIENT_CHOICES = { h: "Horizontale", v: "Verticale" };
 // c'est le seul accès à ce réglage quand le HUD joueur est masqué (les panneaux par
 // barre s'ouvrent alors par clic droit sur la poignée, hors page de config native).
 const TemplateBarConfig = makeSettingsPanel(
-  "ats-template-config", "Barre de gabarits · Réglages", "fa-solid fa-ruler-combined",
+  "ats-template-config", "ATS.panel.template.title", "fa-solid fa-ruler-combined",
   ["templateDock", "templateOrientation", "dockMargin", "templateButtonSize"],
 );
 
 const CombatBarConfig = makeSettingsPanel(
-  "ats-combat-config", "Suivi de combat · Réglages", "fa-solid fa-swords",
+  "ats-combat-config", "ATS.panel.combat.title", "fa-solid fa-swords",
   [
     "combatDock", "combatOrientation", "dockMargin", "combatCurrentInline", "showImages", "imageMode", "featuredImageMode",
     "hideInitInCombat", "showNextButton", "rowSize", "currentImageSize",
@@ -54,7 +61,7 @@ const CombatBarConfig = makeSettingsPanel(
 );
 
 const TokenBarConfig = makeSettingsPanel(
-  "ats-token-config", "Barre d'action du token · Réglages", "fa-solid fa-hand-fist",
+  "ats-token-config", "ATS.panel.token.title", "fa-solid fa-hand-fist",
   [
     "dockPosition", "tokenOrientation", "dockMargin", "tokenButtonSize", "includeInventory", "onlyEquippedWeapons",
     "includeFeatures", "includeSpells", "showGroupLabels", "dedupeByName",
@@ -69,32 +76,29 @@ const TokenBarConfig = makeSettingsPanel(
 const BAR_MENUS = new Map([
   [SpellTemplateBar, {
     menuKey: "templateBarMenu", panel: TemplateBarConfig, icon: "fa-solid fa-ruler-combined",
-    label: "Barre de gabarits", hint: "Ancrage et taille des boutons de la barre de gabarits.",
+    label: "ATS.menu.template.label", hint: "ATS.menu.template.hint",
   }],
   [CombatOverlay, {
     menuKey: "combatBarMenu", panel: CombatBarConfig, icon: "fa-solid fa-swords",
-    label: "Suivi de combat", hint: "Ancrage, images, tailles et automatisations de l'overlay de combat.",
+    label: "ATS.menu.combat.label", hint: "ATS.menu.combat.hint",
   }],
   [TokenActionBar, {
     menuKey: "tokenBarMenu", panel: TokenBarConfig, icon: "fa-solid fa-hand-fist",
-    label: "Barre d'action du token", hint: "Ancrage, contenu (armes, features, sorts) et affichage de la barre.",
+    label: "ATS.menu.token.label", hint: "ATS.menu.token.hint",
   }],
 ]);
 
 /**
  * Enregistre le réglage de BORD d'ancrage d'une barre (présenté dans son panneau).
  * @param {string} key      Clé du réglage (déclarée par la barre via `dockSettingKey`).
- * @param {string} name     Libellé affiché.
+ * @param {string} name     Clé i18n du libellé affiché.
  * @param {string} def      Bord par défaut (« free » | top | bottom | left | right).
  * @param {() => void} onChange Rappel appliquant l'ancrage sur l'instance vivante.
  */
 function registerDock(key, name, def, onChange) {
   game.settings.register(MODULE_ID, key, {
     name,
-    hint: "Colle la barre sur un bord de l'écran ; le long du bord elle s'ancre à un repère " +
-          "(début / centre / fin), posé au glisser. « Libre » = glisser-déposer libre. " +
-          "L'orientation est indépendante (réglage ci-dessous + bouton ↻). Astuce : plusieurs " +
-          "barres sur un même bord se rangent côte à côte, jamais l'une sur l'autre.",
+    hint: "ATS.dock.hint",
     scope: "client", config: false, type: String,
     choices: EDGE_CHOICES,
     default: def,
@@ -109,8 +113,8 @@ function registerDock(key, name, def, onChange) {
  */
 function registerOrientation(key, onChange) {
   game.settings.register(MODULE_ID, key, {
-    name: "Orientation de la barre",
-    hint: "Horizontale ou verticale, indépendamment du bord d'ancrage. Aussi accessible par le bouton ↻ de la barre.",
+    name: "ATS.orient.name",
+    hint: "ATS.orient.hint",
     scope: "client", config: false, type: String,
     choices: ORIENT_CHOICES,
     default: "h",
@@ -145,8 +149,8 @@ export function registerSettings() {
 
   // ── Ancrage commun à toutes les barres (réglage global, visible) ────────────
   game.settings.register(MODULE_ID, "dockMargin", {
-    name: "Barres · Marge d'ancrage à l'écran (px)",
-    hint: "Écart entre une barre ancrée et le bord de l'écran. 0 = collée au bord.",
+    name: "ATS.settings.dockMargin.name",
+    hint: "ATS.settings.dockMargin.hint",
     scope: "client", config: true, type: Number, default: 8,
     onChange: () => FloatingBar.layoutAll(),
   });
@@ -160,14 +164,14 @@ export function registerSettings() {
   });
 
   // ── Barre de gabarits (panneau TemplateBarConfig) ───────────────────────────
-  registerDock("templateDock", "Ancrage de la barre", "free",
+  registerDock("templateDock", "ATS.dock.name", "free",
     () => SpellTemplateBar.instance?.applyDock());
   registerOrientation("templateOrientation",
     () => SpellTemplateBar.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "templateButtonSize", {
-    name: "Taille des boutons (px)",
-    hint: "Taille des boutons de la barre de gabarits.",
+    name: "ATS.settings.templateButtonSize.name",
+    hint: "ATS.settings.templateButtonSize.hint",
     scope: "client", config: false, type: Number, default: 40,
     onChange: () => SpellTemplateBar.instance?.applyButtonSize(),
   });
@@ -176,143 +180,143 @@ export function registerSettings() {
   const syncCombat = () => CombatOverlay.instance?.sync();
   const sizeCombat = () => CombatOverlay.instance?.applySizes();
 
-  registerDock("combatDock", "Ancrage de la barre", "free",
+  registerDock("combatDock", "ATS.dock.name", "free",
     () => CombatOverlay.instance?.applyDock());
   registerOrientation("combatOrientation",
     () => CombatOverlay.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "combatCurrentInline", {
-    name: "Courant affiché dans la liste",
-    hint: "Le combattant à son tour s'agrandit EN PLACE dans la liste, avec les cibles flottantes à sa droite. Désactivé : ancien affichage — portrait du courant et cibles regroupés dans une colonne à droite.",
+    name: "ATS.settings.combatCurrentInline.name",
+    hint: "ATS.settings.combatCurrentInline.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "showImages", {
-    name: "Afficher les portraits",
-    hint: "Rail avec les images des combattants (créature / personnage). Désactivé : pastilles compactes avec initiales.",
+    name: "ATS.settings.showImages.name",
+    hint: "ATS.settings.showImages.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "imageMode", {
-    name: "Image des combattants (liste)",
-    hint: "Vignettes de la liste / du rail : portrait de la fiche d'acteur ou image du token placé sur la scène.",
+    name: "ATS.settings.imageMode.name",
+    hint: "ATS.settings.imageMode.hint",
     scope: "world", config: false, type: String,
-    choices: { actor: "Portrait de l'acteur", token: "Image du token" },
+    choices: IMAGE_CHOICES,
     default: "actor",
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "featuredImageMode", {
-    name: "Image du courant et des cibles",
-    hint: "Grand portrait du combattant courant et des cibles : portrait de la fiche d'acteur ou image du token. Indépendant du réglage des vignettes de la liste.",
+    name: "ATS.settings.featuredImageMode.name",
+    hint: "ATS.settings.featuredImageMode.hint",
     scope: "world", config: false, type: String,
-    choices: { actor: "Portrait de l'acteur", token: "Image du token" },
+    choices: IMAGE_CHOICES,
     default: "actor",
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "hideInitInCombat", {
-    name: "Masquer l'initiative en combat",
-    hint: "L'initiative n'est utile qu'au réglage : on la masque une fois le combat lancé (rééditable via le bouton d'options ⋮). Désactivé : petit chiffre dans le coin de la vignette. Réglage commun à la table (MJ).",
+    name: "ATS.settings.hideInitInCombat.name",
+    hint: "ATS.settings.hideInitInCombat.hint",
     scope: "world", config: false, type: Boolean, default: true,
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "showNextButton", {
-    name: "Afficher les boutons de tour",
-    hint: "Ajoute une ligne de boutons « tour précédent / suivant » sous l'en-tête (MJ). Désactivé par défaut : les raccourcis « . » et « , » suffisent. Réglage réservé au MJ.",
+    name: "ATS.settings.showNextButton.name",
+    hint: "ATS.settings.showNextButton.hint",
     scope: "world", config: false, type: Boolean, default: false,
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "rowSize", {
-    name: "Taille des vignettes du rail (px)",
-    hint: "Diamètre des vignettes de combattants dans le rail.",
+    name: "ATS.settings.rowSize.name",
+    hint: "ATS.settings.rowSize.hint",
     scope: "client", config: false, type: Number, default: 46,
     onChange: sizeCombat,
   });
 
   game.settings.register(MODULE_ID, "currentImageSize", {
-    name: "Taille du portrait du combattant courant (px)",
-    hint: "Grand portrait du combattant courant (et des cibles). Réglage commun à la table (affecte aussi la vue des joueurs).",
+    name: "ATS.settings.currentImageSize.name",
+    hint: "ATS.settings.currentImageSize.hint",
     scope: "world", config: false, type: Number, default: 132,
     onChange: sizeCombat,
   });
 
   game.settings.register(MODULE_ID, "autoControlToken", {
-    name: "Sélectionner le token du combattant courant",
-    hint: "À chaque changement de tour, sélectionne sur la scène le token du combattant courant (pour l'utilisateur qui le possède).",
+    name: "ATS.settings.autoControlToken.name",
+    hint: "ATS.settings.autoControlToken.hint",
     scope: "world", config: false, type: Boolean, default: true,
   });
 
   game.settings.register(MODULE_ID, "autoPanToken", {
-    name: "Centrer la caméra sur le combattant courant (MJ)",
-    hint: "À chaque changement de tour, centre la vue du MJ sur le token courant. N'affecte pas la caméra des joueurs.",
+    name: "ATS.settings.autoPanToken.name",
+    hint: "ATS.settings.autoPanToken.hint",
     scope: "world", config: false, type: Boolean, default: true,
   });
 
   // ── Barre d'action du token (panneau TokenBarConfig) ────────────────────────
   const reRenderToken = () => TokenActionBar.instance?.render();
 
-  registerDock("dockPosition", "Ancrage de la barre", "bottom",
+  registerDock("dockPosition", "ATS.dock.name", "bottom",
     () => TokenActionBar.instance?.applyDock());
   registerOrientation("tokenOrientation",
     () => TokenActionBar.instance?.applyDock());
 
   game.settings.register(MODULE_ID, "tokenButtonSize", {
-    name: "Taille des boutons (px)",
-    hint: "Taille des icônes d'objet de la barre.",
+    name: "ATS.settings.tokenButtonSize.name",
+    hint: "ATS.settings.tokenButtonSize.hint",
     scope: "client", config: false, type: Number, default: 42,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "includeInventory", {
-    name: "Afficher les armes",
-    hint: "Armes (équipées par défaut).",
+    name: "ATS.settings.includeInventory.name",
+    hint: "ATS.settings.includeInventory.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "onlyEquippedWeapons", {
-    name: "Armes équipées uniquement",
-    hint: "N'afficher que les armes actuellement équipées.",
+    name: "ATS.settings.onlyEquippedWeapons.name",
+    hint: "ATS.settings.onlyEquippedWeapons.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "includeFeatures", {
-    name: "Afficher les features",
-    hint: "Dons réellement actionnables (effet réel, consommation de ressource ou charges), avec compteur de charges.",
+    name: "ATS.settings.includeFeatures.name",
+    hint: "ATS.settings.includeFeatures.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "includeSpells", {
-    name: "Afficher les sorts",
-    hint: "Cantrips (niveau 0) puis sorts groupés par niveau, avec les emplacements restants / total.",
+    name: "ATS.settings.includeSpells.name",
+    hint: "ATS.settings.includeSpells.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "showGroupLabels", {
-    name: "Afficher les en-têtes de groupe",
-    hint: "Mince ligne de libellés de section (Armes, Features, Cantrips, N1…) et compteurs d'emplacements, au-dessus des icônes.",
+    name: "ATS.settings.showGroupLabels.name",
+    hint: "ATS.settings.showGroupLabels.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "dedupeByName", {
-    name: "Masquer les doublons",
-    hint: "Masque les objets de même nom (garde le premier).",
+    name: "ATS.settings.dedupeByName.name",
+    hint: "ATS.settings.dedupeByName.hint",
     scope: "client", config: false, type: Boolean, default: true,
     onChange: reRenderToken,
   });
 
   game.settings.register(MODULE_ID, "alwaysShowFeatureNames", {
-    name: "Features « rappel » toujours affichées",
-    hint: "Noms de features toujours affichées même sans effet mécanique (séparés par des virgules). Correspondance par sous-chaîne, casse ignorée.",
+    name: "ATS.settings.alwaysShowFeatureNames.name",
+    hint: "ATS.settings.alwaysShowFeatureNames.hint",
     scope: "client", config: false, type: String, default: "Multiattack, Spellcasting",
     onChange: reRenderToken,
   });
@@ -333,10 +337,9 @@ export function registerSettings() {
   });
 
   game.settings.registerMenu(MODULE_ID, "hideMenu", {
-    name: "Masquage · Interface, onglets et barres",
-    label: "Configurer le masquage",
-    hint: "Choisir, par audience (MJ, écran de table « TV », autres joueurs), les éléments à masquer : " +
-          "éléments du HUD, onglets de la sidebar et barres de la suite. Le MJ pilote tous les écrans.",
+    name: "ATS.menu.hide.name",
+    label: "ATS.menu.hide.label",
+    hint: "ATS.menu.hide.hint",
     icon: "fa-solid fa-eye-slash",
     type: HideConfig,
     restricted: true,
@@ -395,8 +398,8 @@ export function registerSettings() {
 export function registerKeybindings() {
   // « . » : tour suivant (le MJ pilote le combat → raccourci réservé au MJ).
   game.keybindings.register(MODULE_ID, "nextTurn", {
-    name: "Combat : tour suivant",
-    hint: "Passe au combattant suivant.",
+    name: "ATS.keybind.nextTurn.name",
+    hint: "ATS.keybind.nextTurn.hint",
     editable: [{ key: "Period" }],
     restricted: true,
     onDown: () => CombatOverlay.advanceTurn(+1),
@@ -404,8 +407,8 @@ export function registerKeybindings() {
 
   // « , » : tour précédent.
   game.keybindings.register(MODULE_ID, "prevTurn", {
-    name: "Combat : tour précédent",
-    hint: "Revient au combattant précédent.",
+    name: "ATS.keybind.prevTurn.name",
+    hint: "ATS.keybind.prevTurn.hint",
     editable: [{ key: "Comma" }],
     restricted: true,
     onDown: () => CombatOverlay.advanceTurn(-1),
@@ -414,8 +417,8 @@ export function registerKeybindings() {
   // « / » : place le curseur dans le champ PV du panneau cible (saisie clavier
   // rapide à la table). Cible : les tokens ciblés (T), sinon le token sélectionné.
   game.keybindings.register(MODULE_ID, "focusHp", {
-    name: "Combat : modifier les PV de la cible",
-    hint: "Place le curseur dans le champ PV du panneau cible. Entrer « 8 » (dégâts) ou « +8 » (soin), puis Entrée.",
+    name: "ATS.keybind.focusHp.name",
+    hint: "ATS.keybind.focusHp.hint",
     editable: [{ key: "Slash" }],
     restricted: true,
     onDown: () => CombatOverlay.focusHp(),
