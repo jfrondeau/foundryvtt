@@ -166,6 +166,15 @@ export class CombatOverlay extends FloatingBar {
     return combat.turns.filter(c => game.user.isGM || !c.hidden);
   }
 
+  /**
+   * L'utilisateur peut-il voir les vitals (PV + initiative) de ce combattant ? Le MJ voit
+   * tout ; les joueurs voient les PJ mais PAS les monstres (NPC) — à la table, on ne révèle
+   * ni les PV ni l'init des créatures. Les PV numériques restent en plus réservés au MJ.
+   */
+  canSeeVitals(c) {
+    return game.user.isGM || !c.isNPC;
+  }
+
   // ── Construction du conteneur (une seule fois) ───────────────────────────
   mount() {
     if (this.root) return;
@@ -289,12 +298,13 @@ export class CombatOverlay extends FloatingBar {
       header.appendChild(edit);
     }
 
-    // Toggle minimiser (toujours à droite).
+    // Toggle minimiser (toujours à droite). L'icône (sens selon l'orientation) est
+    // posée par updateCollapseIcon, appelée après attache au DOM.
     const toggle = document.createElement("div");
-    toggle.className = "co-toggle";
+    toggle.className = "co-toggle fb-toggle";
     const collapsed = this.root.classList.contains("co-collapsed");
     toggle.dataset.tooltip = collapsed ? "Ré-étendre" : "Minimiser";
-    toggle.innerHTML = `<i class="fas fa-chevron-${collapsed ? "down" : "up"}"></i>`;
+    toggle.appendChild(document.createElement("i"));
     toggle.addEventListener("click", () => this.toggleCollapsed());
     header.appendChild(toggle);
 
@@ -408,7 +418,8 @@ export class CombatOverlay extends FloatingBar {
 
       item.appendChild(this.thumbEl(c, { ember: isCurrent }));
       // Init affichée À CÔTÉ de la vignette (liste large), pas en surimpression.
-      if (showInit) item.appendChild(this.initLabel(c));
+      // Masquée pour les monstres côté joueur.
+      if (showInit && this.canSeeVitals(c)) item.appendChild(this.initLabel(c));
 
       item.dataset.tooltip = c.name;
       item.addEventListener("click", () => this.focusToken(c));
@@ -443,7 +454,7 @@ export class CombatOverlay extends FloatingBar {
 
     const head = document.createElement("div");
     head.className = "co-list-head";
-    if (showInit) head.appendChild(this.initLabel(c));
+    if (showInit && this.canSeeVitals(c)) head.appendChild(this.initLabel(c));
     const name = document.createElement("div");
     name.className = "co-card-name";
     name.textContent = this.combatantDead(c) ? `☠ ${c.name}` : c.name;
@@ -587,7 +598,8 @@ export class CombatOverlay extends FloatingBar {
     const wrap = document.createElement("div");
     wrap.className = "co-thumb";
 
-    const ratio = this.hpRatioOf(c.actor);
+    // Anneau de PV masqué pour les monstres côté joueur (pas de fuite des PV).
+    const ratio = this.canSeeVitals(c) ? this.hpRatioOf(c.actor) : null;
     if (ratio !== null) {
       const ring = document.createElement("div");
       ring.className = "co-ring";
@@ -898,9 +910,10 @@ export class CombatOverlay extends FloatingBar {
       });
       return input;
     }
+    // Non-propriétaire : valeur en lecture seule, masquée pour les monstres côté joueur.
     const span = document.createElement("div");
     span.className = "co-init";
-    span.textContent = hasInit ? c.initiative : "–";
+    span.textContent = (hasInit && this.canSeeVitals(c)) ? c.initiative : "–";
     return span;
   }
 
@@ -1034,9 +1047,9 @@ export class CombatOverlay extends FloatingBar {
   get collapsedClass() { return "co-collapsed"; }
 
   updateCollapseIcon(on) {
-    const icon = this.root.querySelector(".co-toggle i");
-    if (icon) icon.className = `fas fa-chevron-${on ? "down" : "up"}`;
-    const toggle = this.root.querySelector(".co-toggle");
+    const icon = this.root?.querySelector(".co-toggle i");
+    if (icon) icon.className = this.collapseChevronClass();
+    const toggle = this.root?.querySelector(".co-toggle");
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre" : "Minimiser";
   }
 

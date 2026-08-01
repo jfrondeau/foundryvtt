@@ -215,15 +215,15 @@ export function registerSettings() {
 
   game.settings.register(MODULE_ID, "hideInitInCombat", {
     name: "Masquer l'initiative en combat",
-    hint: "L'initiative n'est utile qu'au réglage : on la masque une fois le combat lancé (rééditable via le bouton d'options ⋮). Désactivé : petit chiffre dans le coin de la vignette.",
-    scope: "client", config: false, type: Boolean, default: true,
+    hint: "L'initiative n'est utile qu'au réglage : on la masque une fois le combat lancé (rééditable via le bouton d'options ⋮). Désactivé : petit chiffre dans le coin de la vignette. Réglage commun à la table (MJ).",
+    scope: "world", config: false, type: Boolean, default: true,
     onChange: syncCombat,
   });
 
   game.settings.register(MODULE_ID, "showNextButton", {
     name: "Afficher les boutons de tour",
-    hint: "Ajoute une ligne de boutons « tour précédent / suivant » sous l'en-tête (MJ). Désactivé par défaut : les raccourcis « . » et « , » suffisent.",
-    scope: "client", config: false, type: Boolean, default: false,
+    hint: "Ajoute une ligne de boutons « tour précédent / suivant » sous l'en-tête (MJ). Désactivé par défaut : les raccourcis « . » et « , » suffisent. Réglage réservé au MJ.",
+    scope: "world", config: false, type: Boolean, default: false,
     onChange: syncCombat,
   });
 

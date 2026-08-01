@@ -162,7 +162,12 @@
 /* Replié : même silhouette que les autres barres (poignée + pastille + toggle).
    On masque le libellé du round et le bouton d'options, et on aligne l'espacement
    sur les autres barres réduites. */
-#combat-overlay.co-collapsed .co-header { border-radius: 8px; padding: 3px 5px; gap: 4px; }
+#combat-overlay.co-collapsed .co-header {
+  border-radius: 6px; padding: 3px 5px; gap: 4px;
+  /* Contour discret pour retrouver la même silhouette que les autres barres réduites
+     (qui portent un liseré 1px sur leur racine). */
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
 #combat-overlay.co-collapsed .co-round,
 #combat-overlay.co-collapsed .co-header .co-btn { display: none; }
 
@@ -549,6 +554,18 @@
   color: #ccc; border: 1px solid #666; border-radius: 4px; cursor: pointer; font-size: 12px;
 }
 #selected-token-actions .ab-toggle:hover { color: #fff; border-color: #ff6400; }
+
+/* ── Dimensions communes poignée / toggle (source unique, thèmes conservés) ─────
+   Placé APRÈS les règles par barre : mêmes spécificités → l'ordre source l'emporte,
+   donc seules les dimensions sont uniformisées ; couleurs/survol restent par thème.
+   Garantit que poignée et toggle ont la même taille et s'alignent d'une barre à l'autre. */
+#spell-template-bar .fb-handle,
+#combat-overlay .fb-handle,
+#selected-token-actions .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
+
+#spell-template-bar .fb-toggle,
+#combat-overlay .fb-toggle,
+#selected-token-actions .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
 
 /* ── État minimisé : poignée + pastille d'identité + toggle ────────────────────── */
 #selected-token-actions.ab-collapsed { gap: 4px; padding: 3px 5px; }

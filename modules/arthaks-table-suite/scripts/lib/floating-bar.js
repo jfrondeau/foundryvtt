@@ -313,6 +313,23 @@ export class FloatingBar {
   /** Bouton ↻ : bascule horizontale / verticale (ne change PAS l'ordre d'empilement). */
   toggleOrientation() { this.setOrientation(this.getOrientation() === "h" ? "v" : "h"); }
 
+  /** Orientation VISUELLE effective : verticale uniquement si ancrée ET orientation « v ». */
+  isVertical() { return this.isDocked() && this.getOrientation() === "v"; }
+
+  /**
+   * Classe d'icône du bouton replier/déployer, selon l'orientation VISUELLE de la barre et
+   * l'état replié. La flèche indique le sens du contenu : barre horizontale → gauche/droite,
+   * barre verticale → haut/bas. Dépliée, elle pointe « vers l'intérieur » (replier vers la
+   * poignée) ; repliée, « vers l'extérieur » (déployer le contenu).
+   */
+  collapseChevronClass() {
+    const collapsed = this.isCollapsed();
+    const dir = this.isVertical()
+      ? (collapsed ? "down" : "up")
+      : (collapsed ? "right" : "left");
+    return `fas fa-chevron-${dir}`;
+  }
+
   /** Applique les classes d'orientation/ancrage sur l'élément racine. */
   _applyDockClasses() {
     const edge = this.getEdge(), docked = edge !== "free";
@@ -320,6 +337,8 @@ export class FloatingBar {
     this.el.classList.toggle("fb-docked", docked);
     this.el.classList.toggle("fb-vertical", vertical);
     this.el.classList.toggle("fb-horizontal", docked && !vertical);
+    // L'orientation vient (peut-être) de changer : réaligner la flèche du toggle sur elle.
+    this.updateCollapseIcon?.(this.isCollapsed());
   }
 
   /**
@@ -576,7 +595,7 @@ export class FloatingBar {
    */
   makeHandle(className, tooltip = "Glisser pour déplacer · clic droit : réglages") {
     const handle = document.createElement("i");
-    handle.className = `fas fa-grip-vertical ${className}`;
+    handle.className = `fas fa-grip-vertical fb-handle ${className}`;
     handle.dataset.tooltip = tooltip;
     this.initDrag(handle);
     handle.addEventListener("contextmenu", (ev) => {

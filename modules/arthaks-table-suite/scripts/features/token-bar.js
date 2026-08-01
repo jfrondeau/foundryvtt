@@ -391,17 +391,19 @@ export class TokenActionBar extends FloatingBar {
     }
     this.bar.appendChild(wrap);
 
-    // Toggle minimiser / ré-étendre (toujours visible).
+    // Toggle minimiser / ré-étendre (toujours visible). L'icône (sens selon
+    // l'orientation) est posée par updateCollapseIcon après attache au DOM.
     const collapsed = localStorage.getItem(this.collapsedKey) === "1";
     const toggle = document.createElement("div");
-    toggle.className = "ab-toggle";
+    toggle.className = "ab-toggle fb-toggle";
     toggle.dataset.tooltip = collapsed ? "Ré-étendre la barre" : "Minimiser la barre";
-    toggle.innerHTML = `<i class="fas fa-chevron-${collapsed ? "right" : "left"}"></i>`;
+    toggle.appendChild(document.createElement("i"));
     toggle.addEventListener("click", () => this.toggleCollapsed());
     this.bar.appendChild(toggle);
 
     this.bar.classList.toggle("ab-collapsed", collapsed);
     this.bar.classList.toggle("fb-collapsed", collapsed); // classe partagée : styles de repli communs
+    this.updateCollapseIcon(collapsed);
 
     // Placement + orientation une fois le contenu construit (dimensions connues).
     this.applyDock();
@@ -440,9 +442,9 @@ export class TokenActionBar extends FloatingBar {
   get collapsedClass() { return "ab-collapsed"; }
 
   updateCollapseIcon(on) {
-    const icon = this.bar.querySelector(".ab-toggle i");
-    if (icon) icon.className = `fas fa-chevron-${on ? "right" : "left"}`;
-    const toggle = this.bar.querySelector(".ab-toggle");
+    const icon = this.bar?.querySelector(".ab-toggle i");
+    if (icon) icon.className = this.collapseChevronClass();
+    const toggle = this.bar?.querySelector(".ab-toggle");
     if (toggle) toggle.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
   }
 

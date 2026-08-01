@@ -119,16 +119,16 @@ export class SpellTemplateBar extends FloatingBar {
     trash.addEventListener("click", (ev) => { ev.preventDefault(); this.clearMine(); });
     bar.appendChild(trash);
 
-    // Toggle minimiser / ré-étendre (toujours visible).
+    // Toggle minimiser / ré-étendre (toujours visible). L'icône est posée par
+    // updateCollapseIcon selon l'orientation et l'état.
     const toggle = document.createElement("div");
-    toggle.className = "tb-toggle";
+    toggle.className = "tb-toggle fb-toggle";
     toggle.dataset.tooltip = "Minimiser la barre";
-    const toggleIcon = document.createElement("i");
-    toggleIcon.className = "fas fa-chevron-left";
-    toggle.appendChild(toggleIcon);
+    toggle.appendChild(document.createElement("i"));
     toggle.addEventListener("click", () => this.toggleCollapsed());
     this.toggleIcon = toggle;
     bar.appendChild(toggle);
+    this.updateCollapseIcon(this.isCollapsed());
 
     this.applyButtonSize();
     this.applyDock();
@@ -181,9 +181,9 @@ export class SpellTemplateBar extends FloatingBar {
   get collapsedClass() { return "stb-collapsed"; }
 
   updateCollapseIcon(on) {
-    const icon = this.toggleIcon.querySelector("i");
-    icon.className = on ? "fas fa-chevron-right" : "fas fa-chevron-left";
-    this.toggleIcon.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
+    const icon = this.toggleIcon?.querySelector("i");
+    if (icon) icon.className = this.collapseChevronClass();
+    if (this.toggleIcon) this.toggleIcon.dataset.tooltip = on ? "Ré-étendre la barre" : "Minimiser la barre";
   }
 
   // ── Activation du mode gabarit ─────────────────────────────────────────────
