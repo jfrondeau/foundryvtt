@@ -472,7 +472,10 @@ export class FloatingBar {
   _ensureMirror() {
     const m = this.el.cloneNode(true);
     m.classList.add("fb-mirror");
-    m.removeAttribute("id"); // évite un id dupliqué avec le primaire (getElementById / body > #id).
+    // NE PAS retirer l'id : tout le CSS des barres est scopé par id (#spell-template-bar,
+    // #combat-overlay, #selected-token-actions). Le miroir DOIT garder l'id pour hériter de la
+    // même mise en page ; sans lui il s'effondre en bloc non stylé. Aucun code ne résout ces
+    // barres par getElementById (références directes this.el/this.bar), l'id dupliqué est inerte.
     document.body.appendChild(m);
     this.mirrorEl = m;
     this._mirrorEvent = (ev) => this._forwardMirrorEvent(ev);
