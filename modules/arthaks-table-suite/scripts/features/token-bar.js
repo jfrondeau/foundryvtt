@@ -331,18 +331,8 @@ export class TokenActionBar extends FloatingBar {
     this._activeActorId = actor.id;
     this.bar.style.display = "flex";
 
-    // Poignée de déplacement (toujours visible, ancrée ou libre) + bouton ↻ (visible ancrée).
-    this.bar.appendChild(this.makeHandle("ab-handle"));
-    this.bar.appendChild(this.makeRotateButton("ab-rotate"));
-
-    // Pastille d'identité (visible seulement une fois la barre repliée).
-    this.bar.appendChild(this.makeBadge("fa-hand-fist"));
-
-    // Libellé (repliable).
-    const label = document.createElement("div");
-    label.className = "ab-label ab-collapsible";
-    label.textContent = token.name;
-    this.bar.appendChild(label);
+    // En-tête commun (poignée · ↻ · pastille · titre · repli) sur une ligne, AVANT le contenu.
+    this.bar.appendChild(this.makeHeader("ab", { icon: "fa-hand-fist", title: token.name }));
 
     // Groupes (repliables) : Inventaire → Features → Sorts (cantrips + par niveau).
     const sections = buildSections(actor);
@@ -398,19 +388,8 @@ export class TokenActionBar extends FloatingBar {
     }
     this.bar.appendChild(wrap);
 
-    // Toggle minimiser / ré-étendre (toujours visible). L'icône (sens selon
-    // l'orientation) est posée par updateCollapseIcon après attache au DOM.
-    const collapsed = localStorage.getItem(this.collapsedKey) === "1";
-    const toggle = document.createElement("div");
-    toggle.className = "ab-toggle fb-toggle";
-    toggle.dataset.tooltip = collapsed ? t("ATS.bar.expand") : t("ATS.bar.collapse");
-    toggle.appendChild(document.createElement("i"));
-    toggle.addEventListener("click", () => this.toggleCollapsed());
-    this.bar.appendChild(toggle);
-
-    this.bar.classList.toggle("ab-collapsed", collapsed);
-    this.bar.classList.toggle("fb-collapsed", collapsed); // classe partagée : styles de repli communs
-    this.updateCollapseIcon(collapsed);
+    // Application de l'état replié mémorisé (le bouton de repli est dans l'en-tête).
+    this.applyCollapsedState();
 
     // Placement + orientation une fois le contenu construit (dimensions connues).
     this.applyDock();
@@ -450,15 +429,8 @@ export class TokenActionBar extends FloatingBar {
     return btn;
   }
 
-  // ── Minimiser (skeleton dans FloatingBar) ──────────────────────────────────
+  // ── Minimiser (skeleton + icône dans FloatingBar) ──────────────────────────
   get collapsedClass() { return "ab-collapsed"; }
-
-  updateCollapseIcon(on) {
-    const icon = this.bar?.querySelector(".ab-toggle i");
-    if (icon) icon.className = this.collapseChevronClass();
-    const toggle = this.bar?.querySelector(".ab-toggle");
-    if (toggle) toggle.dataset.tooltip = on ? t("ATS.bar.expand") : t("ATS.bar.collapse");
-  }
 
   // ── Position / ancrage ─────────────────────────────────────────────────────
   // Ancrage aux bords, orientation et reflow : hérités de FloatingBar. La barre
@@ -476,9 +448,9 @@ export class TokenActionBar extends FloatingBar {
    */
   constrainSize() {
     if (!this.bar || this.bar.style.display === "none") return;
-    // Barre verticale = ancrée ET orientation « v » ; sinon horizontale (inclut le mode
-    // libre). Lu avant qu'applyDock ne pose la classe fb-vertical, d'où l'accès direct.
-    const vertical = this.isDocked() && this.getOrientation() === "v";
+    // Barre verticale = orientation « v » (indépendante de l'ancrage) ; sinon horizontale.
+    // Lu avant qu'applyDock ne pose la classe fb-vertical, d'où l'accès direct.
+    const vertical = this.getOrientation() === "v";
     if (vertical) {
       this.bar.style.maxWidth = "";
       this.bar.style.maxHeight = `${window.innerHeight - 8}px`;

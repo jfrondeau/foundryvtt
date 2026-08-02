@@ -26,15 +26,22 @@
    par _layoutMirror, seul le contenu est retourné. */
 .fb-mirror { transform: rotate(180deg); }
 
-/* ── Bouton ↻ de rotation d'orientation (commun aux barres ancrables) ────────── */
-/* Masqué en mode libre (l'orientation ne s'applique qu'ancrée) ; affiché dès que la
-   barre porte la classe .fb-docked. */
+/* ── Bouton ↻ de rotation d'orientation (commun aux barres orientables) ────────── */
+/* TOUJOURS visible : l'orientation horizontale / verticale est indépendante de
+   l'ancrage (barre libre ou ancrée). Seul le repli le masque (règle plus bas). */
 .fb-rotate {
-  flex: 0 0 auto; display: none; cursor: pointer; color: #aaa; touch-action: none;
-  padding: 0 4px; font-size: 13px; line-height: 1;
+  flex: 0 0 auto; display: inline-flex; align-items: center; cursor: pointer; color: #aaa;
+  touch-action: none; padding: 0 4px; font-size: 13px; line-height: 1;
 }
 .fb-rotate:hover { color: #fff; }
-.fb-docked .fb-rotate { display: inline-flex; align-items: center; }
+
+/* ── En-tête commun (une ligne) : poignée · ↻ · pastille · titre · repli ────────
+   Regroupe le chrome sur une SEULE ligne, placée AVANT le contenu de la barre. Le
+   conteneur reste une ligne même quand la barre passe en colonne (orientation
+   verticale) : l'en-tête flotte alors au-dessus du contenu. */
+.fb-header { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+/* Repli : espacement resserré, aligné sur la silhouette compacte des barres réduites. */
+.fb-collapsed .fb-header { gap: 4px; }
 
 /* ── Repli commun à toutes les barres ─────────────────────────────────────────
    Une barre minimisée ne montre que : poignée · pastille d'identité · bouton
@@ -140,6 +147,7 @@
    haut, puis chaque COLONNE (rail, détail, liste). Même fond → jonctions
    invisibles ; le vide sous la colonne la plus courte laisse voir la carte. */
 #combat-overlay .co-header,
+#combat-overlay .co-status,
 #combat-overlay .co-nav,
 #combat-overlay .co-rail,
 #combat-overlay .co-detail,
@@ -168,14 +176,16 @@
      (qui portent un liseré 1px sur leur racine). */
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
-#combat-overlay.co-collapsed .co-round,
-#combat-overlay.co-collapsed .co-header .co-btn { display: none; }
-
-/* ── En-tête ──────────────────────────────────────────────────────────────── */
-#combat-overlay .co-header {
+/* ── En-tête (chrome commun) + ligne de statut ────────────────────────────────
+   L'en-tête ne contient que le chrome partagé ; le round et les options sont sur la
+   ligne `co-status` juste en dessous (masquée en repli comme le reste du contenu). */
+#combat-overlay .co-header,
+#combat-overlay .co-status {
   display: flex; align-items: center; gap: 6px;
   padding: 4px 6px;
 }
+/* Panneau plus large que le chrome : le bouton de repli file au bord droit de l'en-tête. */
+#combat-overlay .co-toggle { margin-left: auto; }
 #combat-overlay .co-handle { cursor: grab; color: #8b93a5; touch-action: none; font-size: 13px; line-height: 1; }
 #combat-overlay .co-handle:hover { color: #fff; }
 #combat-overlay .co-handle:active { cursor: grabbing; color: var(--co-current); }
@@ -623,7 +633,7 @@
 #ats-rolls-bar .rb-entry {
   display: flex; align-items: center; gap: 8px;
   padding: 3px 6px; border-radius: 6px; white-space: nowrap;
-  background: rgba(255, 255, 255, 0.05); border-left: 3px solid #5b9bd8;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 #ats-rolls-bar .rb-remove { flex: 0 0 auto; cursor: pointer; color: #8b93a5; font-size: 12px; }
@@ -760,9 +770,55 @@
 #ats-rolls-bar.rb-collapsed { gap: 4px; padding: 3px 5px; }
 #ats-rolls-bar.rb-collapsed .rb-collapsible { display: none; }
 
-/* Orientation verticale (ancrage gauche / droite) : les lignes restent empilées ;
-   seule la barre elle-même s'organise en colonne (poignée au-dessus du contenu). */
+/* ── Orientation verticale (ancrage gauche / droite) : colonne étroite ────────────
+   La barre s'organise en colonne (poignée au-dessus du contenu) ET chaque ligne de
+   jet se replie en « carte » : l'action en tête (✕ ancré en coin), puis attaque,
+   cibles, dégâts EMPILÉS. Les filets séparateurs verticaux (bord gauche du mode
+   horizontal) deviennent des filets horizontaux (bord haut). 100 % CSS : le DOM rendu
+   est identique, seule la disposition change. Le mode horizontal n'est pas touché. */
 #ats-rolls-bar.fb-vertical { flex-direction: column; align-items: stretch; }
+
+/* Pile défilable sur la hauteur, largeur bornée pour rester une colonne étroite. */
+#ats-rolls-bar.fb-vertical .rb-list { max-height: 72vh; width: 200px; }
+
+/* Une carte : tout s'empile, le texte peut passer à la ligne. */
+#ats-rolls-bar.fb-vertical .rb-entry {
+  position: relative;
+  flex-direction: column; align-items: stretch; gap: 5px;
+  white-space: normal; padding: 6px 8px;
+}
+
+/* ✕ ancré en haut à droite de la carte (au lieu d'occuper la 1re ligne). */
+#ats-rolls-bar.fb-vertical .rb-remove { position: absolute; top: 5px; right: 6px; z-index: 1; }
+
+/* Nom de l'action : laisse la place au ✕, autorise jusqu'à 2 lignes. */
+#ats-rolls-bar.fb-vertical .rb-action { padding-right: 16px; }
+#ats-rolls-bar.fb-vertical .rb-action-name {
+  max-width: none; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Filets séparateurs : le bord GAUCHE (horizontal) devient un bord HAUT (vertical). */
+#ats-rolls-bar.fb-vertical .rb-attack,
+#ats-rolls-bar.fb-vertical .rb-targets,
+#ats-rolls-bar.fb-vertical .rb-damage,
+#ats-rolls-bar.fb-vertical .rb-rolldmg {
+  padding-left: 0; border-left: none;
+  padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Attaque : total + dés + bonus sur une ligne, sélecteur d'état replié en dessous. */
+#ats-rolls-bar.fb-vertical .rb-attack { flex-wrap: wrap; }
+#ats-rolls-bar.fb-vertical .rb-mode-ctl { flex-basis: 100%; }
+
+/* Cibles empilées, chacune sur toute la largeur de la carte. */
+#ats-rolls-bar.fb-vertical .rb-targets { flex-direction: column; align-items: stretch; gap: 3px; }
+#ats-rolls-bar.fb-vertical .rb-target { justify-content: flex-start; }
+#ats-rolls-bar.fb-vertical .rb-target-name { max-width: none; flex: 1 1 auto; }
+
+/* Boutons de lancer des dégâts : empilés sur toute la largeur. */
+#ats-rolls-bar.fb-vertical .rb-rolldmg { flex-direction: column; align-items: stretch; }
+#ats-rolls-bar.fb-vertical .rb-rd-btn { justify-content: center; }
 
 /* ╔═══ MASQUAGE DE L'INTERFACE (matrice par audience) ═════════════════════╗ */
 /* Le masquage lui-même est injecté dynamiquement (#ahh-audience-hide) : pas de

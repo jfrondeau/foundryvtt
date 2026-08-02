@@ -226,7 +226,10 @@ export class CombatOverlay extends FloatingBar {
     root.classList.toggle("co-combat", !setupView);
 
     root.innerHTML = "";
-    root.appendChild(this.renderHeader(combat, started, editing));
+    // En-tête commun (identique aux autres barres) puis, sur sa propre ligne, le statut de
+    // combat (round + bouton d'options) — masqué en repli comme le reste du contenu.
+    root.appendChild(this.renderHeader());
+    root.appendChild(this.renderStatus(combat, started, editing));
 
     const visible = this.visibleCombatants(combat);
     const markerId = this.resolveMarkerId(combat, visible);
@@ -280,41 +283,38 @@ export class CombatOverlay extends FloatingBar {
     return null;
   }
 
-  renderHeader(combat, started, editing) {
-    const header = document.createElement("div");
-    header.className = "co-header";
+  /**
+   * En-tête commun IDENTIQUE aux autres barres (poignée · ↻ · pastille · repli). Aucun élément
+   * propre au combat ici : le round et les options sont sur leur propre ligne (renderStatus).
+   */
+  renderHeader() {
+    return this.makeHeader("co", { icon: "fa-khanda" });
+  }
 
-    header.appendChild(this.makeHandle("co-handle", t("ATS.bar.handleTooltip")));
-    header.appendChild(this.makeRotateButton("co-rotate"));
-
-    // Pastille d'identité (visible seulement une fois la barre repliée).
-    header.appendChild(this.makeBadge("fa-khanda"));
+  /**
+   * Ligne de statut de combat, SOUS l'en-tête (repliable) : libellé de round (occupe l'espace)
+   * + bouton d'options ⋮ (bascule combat ↔ édition) réservé au MJ en combat.
+   * @param {Combat} combat
+   * @param {boolean} started
+   * @param {boolean} editing
+   */
+  renderStatus(combat, started, editing) {
+    const status = document.createElement("div");
+    status.className = "co-status co-collapsible";
 
     const round = document.createElement("div");
     round.className = "co-round";
     round.textContent = !started ? t("ATS.combat.prep")
       : (editing ? t("ATS.combat.editRound", { round: combat.round }) : t("ATS.combat.round", { round: combat.round }));
-    header.appendChild(round);
+    status.appendChild(round);
 
-    // Combat : bouton d'options ⋮ (bascule combat ↔ édition). Les boutons de tour
-    // (précédent/suivant) sont sur leur propre ligne sous l'en-tête (renderCombatNav).
     if (game.user.isGM && started) {
       const edit = this.makeBtn("fas fa-sliders", editing ? t("ATS.combat.backToCombat") : t("ATS.combat.editInit"), () => this.toggleEdit());
       edit.classList.toggle("co-active", editing);
-      header.appendChild(edit);
+      status.appendChild(edit);
     }
 
-    // Toggle minimiser (toujours à droite). L'icône (sens selon l'orientation) est
-    // posée par updateCollapseIcon, appelée après attache au DOM.
-    const toggle = document.createElement("div");
-    toggle.className = "co-toggle fb-toggle";
-    const collapsed = this.root.classList.contains("co-collapsed");
-    toggle.dataset.tooltip = collapsed ? t("ATS.bar.expandShort") : t("ATS.bar.collapseShort");
-    toggle.appendChild(document.createElement("i"));
-    toggle.addEventListener("click", () => this.toggleCollapsed());
-    header.appendChild(toggle);
-
-    return header;
+    return status;
   }
 
   // ── Vue « setup » : liste large, initiative éditable ──────────────────────
@@ -552,6 +552,16 @@ export class CombatOverlay extends FloatingBar {
       topVp = railRect.bottom - panelH;
     }
     panel.style.top = `${topVp - rootRect.top}px`;
+  }
+
+  /**
+   * Après une passe de disposition globale (déplacement, ancrage, rotation, resize) : recale
+   * le panneau cible flottant sur la géométrie FINALE du rail. Sans ça, un simple déplacement
+   * ou une rotation laisserait le panneau aux coordonnées calculées lors du dernier render()
+   * (il ne se replaçait qu'au changement de tour). No-op si aucun panneau flottant n'est monté.
+   */
+  afterLayout() {
+    this.positionFloatingTargets();
   }
 
   /** Carte du combattant courant : grand portrait + nom + stats (remplace le spotlight). */
@@ -1065,15 +1075,8 @@ export class CombatOverlay extends FloatingBar {
     this.root?.style.setProperty("--co-spot", `${spot}px`);
   }
 
-  // Minimiser (skeleton dans FloatingBar) : chevron vertical (haut/bas).
+  // Minimiser (skeleton + icône dans FloatingBar) : chevron vertical (haut/bas).
   get collapsedClass() { return "co-collapsed"; }
-
-  updateCollapseIcon(on) {
-    const icon = this.root?.querySelector(".co-toggle i");
-    if (icon) icon.className = this.collapseChevronClass();
-    const toggle = this.root?.querySelector(".co-toggle");
-    if (toggle) toggle.dataset.tooltip = on ? t("ATS.bar.expandShort") : t("ATS.bar.collapseShort");
-  }
 
   // Position : héritée de FloatingBar ; seul le défaut change (coin haut-gauche).
   defaultPosition() { return { left: 10, top: 80 }; }

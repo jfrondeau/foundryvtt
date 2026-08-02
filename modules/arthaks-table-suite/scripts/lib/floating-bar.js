@@ -48,6 +48,7 @@ export class FloatingBar {
   constructor(key) {
     this.key = key;
     this.el = null;          // élément racine (aliasé this.bar / this.root dans les sous-classes)
+    this.toggleEl = null;    // bouton de repli (posé par makeCollapseToggle), lu par updateCollapseIcon
     this.mirrorEl = null;    // clone miroir 180° (mode table) ; null si absent
     this.hookIds = {};
     this._destroyed = false;  // vrai après destroy() : garde les rappels différés (debounce/setTimeout)
@@ -316,8 +317,8 @@ export class FloatingBar {
   /** Bouton ↻ : bascule horizontale / verticale (ne change PAS l'ordre d'empilement). */
   toggleOrientation() { this.setOrientation(this.getOrientation() === "h" ? "v" : "h"); }
 
-  /** Orientation VISUELLE effective : verticale uniquement si ancrée ET orientation « v ». */
-  isVertical() { return this.isDocked() && this.getOrientation() === "v"; }
+  /** Orientation VISUELLE effective : « v » selon l'orientation choisie, INDÉPENDAMMENT de l'ancrage. */
+  isVertical() { return this.getOrientation() === "v"; }
 
   /**
    * Classe d'icône du bouton replier/déployer, selon l'orientation VISUELLE de la barre et
@@ -336,10 +337,12 @@ export class FloatingBar {
   /** Applique les classes d'orientation/ancrage sur l'élément racine. */
   _applyDockClasses() {
     const edge = this.getEdge(), docked = edge !== "free";
-    const vertical = docked && this.getOrientation() === "v";
+    // Orientation DÉCOUPLÉE de l'ancrage : une barre est verticale dès que son orientation
+    // vaut « v » (bouton ↻), qu'elle soit ancrée ou libre.
+    const vertical = this.getOrientation() === "v";
     this.el.classList.toggle("fb-docked", docked);
     this.el.classList.toggle("fb-vertical", vertical);
-    this.el.classList.toggle("fb-horizontal", docked && !vertical);
+    this.el.classList.toggle("fb-horizontal", !vertical);
     // L'orientation vient (peut-être) de changer : réaligner la flèche du toggle sur elle.
     this.updateCollapseIcon?.(this.isCollapsed());
   }
@@ -382,6 +385,11 @@ export class FloatingBar {
         placements.push({ bar: b, edge: b.getEdge(), align: b.getAlign(), order: b.getOrder() });
       }
       FloatingBar._positionEdges(placements);
+
+      // 3b) Position finale posée : chaque barre peut recaler ses sous-éléments dont le
+      //     placement dépend de la géométrie (ex. panneau cible flottant du combat), sinon
+      //     ils gardent des coordonnées calculées pour l'ancienne position/orientation.
+      for (const b of visible) b.afterLayout?.();
 
       // 4) miroirs : réflexion exacte de la position finale du primaire (ancré ET libre).
       if (table) for (const b of visible) if (b.mirrorEl) b._layoutMirror();
@@ -658,8 +666,8 @@ export class FloatingBar {
 
   /**
    * Bouton ↻ de rotation : bascule l'orientation horizontale / verticale de la barre.
-   * N'a de sens (et n'est visible, cf. CSS `.fb-docked .fb-rotate`) que lorsque la barre
-   * est ancrée à un bord. À n'ajouter que par les barres ayant une `orientSettingKey`.
+   * TOUJOURS visible (l'orientation est indépendante de l'ancrage), sauf barre repliée
+   * (cf. CSS). À n'ajouter que par les barres ayant une `orientSettingKey`.
    */
   makeRotateButton(className) {
     const btn = document.createElement("i");
@@ -669,6 +677,66 @@ export class FloatingBar {
     btn.addEventListener("pointerdown", (ev) => ev.stopPropagation());
     btn.addEventListener("click", (ev) => { ev.preventDefault(); this.toggleOrientation(); });
     return btn;
+  }
+
+  /**
+   * En-tête commun à toutes les barres : UNE ligne (`fb-header`) regroupant, dans un ordre
+   * GARANTI par la classe de base, la poignée (⋮⋮) → le bouton ↻ (orientation) → la pastille
+   * d'identité (visible une fois repliée) → le titre repliable (option) → les éléments propres
+   * à la barre (`extra`) → le bouton de repli. Cette ligne se place EN TÊTE du conteneur, AVANT
+   * le contenu de la barre : le repli est donc toujours sur la même ligne que la poignée, avant
+   * le contenu. En orientation verticale, l'en-tête reste une ligne horizontale au-dessus du
+   * contenu (le conteneur, lui, passe en colonne). `prefix` ajoute les classes historiques par
+   * barre pour la compat CSS.
+   * @param {string} prefix        Préfixe CSS de la barre (« ab », « tb », « co », « rb »).
+   * @param {object} opts
+   * @param {string} opts.icon     Classe FontAwesome de la pastille d'identité.
+   * @param {string} [opts.title]  Titre repliable (omis si vide, ex. barre des jets).
+   * @param {Node[]} [opts.extra]  Nœuds propres à la barre, insérés avant le bouton de repli.
+   * @returns {HTMLElement}
+   */
+  makeHeader(prefix, { icon, title, extra = [] } = {}) {
+    const header = document.createElement("div");
+    header.className = `fb-header ${prefix}-header`;
+    header.appendChild(this.makeHandle(`${prefix}-handle`));
+    header.appendChild(this.makeRotateButton(`${prefix}-rotate`));
+    header.appendChild(this.makeBadge(icon));
+    const titleEl = this.makeTitle(prefix, title);
+    if (titleEl) header.appendChild(titleEl);
+    for (const node of extra) if (node) header.appendChild(node);
+    header.appendChild(this.makeCollapseToggle(prefix));
+    return header;
+  }
+
+  /**
+   * Titre repliable commun (nom de token, libellé de barre…), masqué en repli via la classe
+   * `${prefix}-collapsible`. Retourne null si le texte est vide (barres sans titre, ex. jets).
+   * @param {string} prefix  Préfixe CSS de la barre.
+   * @param {string} text    Texte du titre.
+   * @returns {(HTMLElement|null)}
+   */
+  makeTitle(prefix, text) {
+    if (!text) return null;
+    const el = document.createElement("div");
+    el.className = `fb-title ${prefix}-label ${prefix}-collapsible`;
+    el.textContent = text;
+    return el;
+  }
+
+  /**
+   * Bouton de repli commun (⟨/⟩), en pied de chrome. L'icône (sens selon l'orientation) et le
+   * tooltip sont posés par updateCollapseIcon. Mémorise le bouton dans `this.toggleEl` pour que
+   * la classe de base sache le retrouver — les sous-classes n'ont plus à redéfinir l'icône.
+   * @param {string} prefix  Préfixe CSS de la barre.
+   * @returns {HTMLElement}
+   */
+  makeCollapseToggle(prefix) {
+    const toggle = document.createElement("div");
+    toggle.className = `fb-toggle ${prefix}-toggle`;
+    toggle.appendChild(document.createElement("i"));
+    toggle.addEventListener("click", () => this.toggleCollapsed());
+    this.toggleEl = toggle;
+    return toggle;
   }
 
   /**
@@ -686,8 +754,8 @@ export class FloatingBar {
   }
 
   // ── Minimiser (état persisté par utilisateur) ───────────────────────────────
-  // Les sous-classes fournissent `collapsedClass` (nom de la classe CSS) et
-  // `updateCollapseIcon(on)` (met à jour l'icône/tooltip de leur bouton toggle).
+  // Les sous-classes ne fournissent plus que `collapsedClass` (nom de la classe CSS propre) ;
+  // l'icône/tooltip du bouton de repli est gérée ici de façon commune via `this.toggleEl`.
   isCollapsed() { return this.el.classList.contains(this.collapsedClass); }
 
   toggleCollapsed() { this.setCollapsed(!this.isCollapsed()); }
@@ -698,6 +766,30 @@ export class FloatingBar {
     localStorage.setItem(this.collapsedKey, on ? "1" : "0");
     this.updateCollapseIcon(on);
     this.reflow(); // la largeur a changé : re-contraindre / ré-ancrer.
+  }
+
+  /**
+   * Met à jour l'icône (chevron selon l'orientation) et le tooltip du bouton de repli. Commun à
+   * toutes les barres via `this.toggleEl` (posé par makeCollapseToggle) — plus de surcharge par
+   * barre. Sans effet tant que le bouton n'est pas construit (rendu initial).
+   * @param {boolean} [on]  État replié ; déduit de la classe si omis.
+   */
+  updateCollapseIcon(on = this.isCollapsed()) {
+    const icon = this.toggleEl?.querySelector("i");
+    if (icon) icon.className = this.collapseChevronClass();
+    if (this.toggleEl) this.toggleEl.dataset.tooltip = on ? t("ATS.bar.expand") : t("ATS.bar.collapse");
+  }
+
+  /**
+   * Applique l'état replié MÉMORISÉ (localStorage) lors du (re)rendu : pose les classes de repli
+   * (propre à la barre + partagée) et l'icône. À appeler en fin de render, après le bouton de
+   * repli et AVANT applyDock (pour que la disposition tienne compte de la taille repliée).
+   */
+  applyCollapsedState() {
+    const on = localStorage.getItem(this.collapsedKey) === "1";
+    this.el.classList.toggle(this.collapsedClass, on);
+    this.el.classList.toggle("fb-collapsed", on);
+    this.updateCollapseIcon(on);
   }
 
   /** Désenregistre les hooks, retire l'écouteur de resize, supprime l'élément. */

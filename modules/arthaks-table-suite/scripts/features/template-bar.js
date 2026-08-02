@@ -77,18 +77,8 @@ export class SpellTemplateBar extends FloatingBar {
     this.bar = bar;
     document.body.appendChild(bar);
 
-    // Poignée de déplacement + bouton ↻ (rotation, visible seulement quand ancrée).
-    bar.appendChild(this.makeHandle("tb-handle"));
-    bar.appendChild(this.makeRotateButton("tb-rotate"));
-
-    // Pastille d'identité (visible seulement une fois la barre repliée).
-    bar.appendChild(this.makeBadge("fa-draw-polygon"));
-
-    // Libellé (repliable).
-    const label = document.createElement("div");
-    label.className = "tb-label tb-collapsible";
-    label.textContent = t("ATS.template.label");
-    bar.appendChild(label);
+    // En-tête commun (poignée · ↻ · pastille · titre · repli) sur une ligne, AVANT le contenu.
+    bar.appendChild(this.makeHeader("tb", { icon: "fa-draw-polygon", title: t("ATS.template.label") }));
 
     // Boutons de forme (repliables).
     for (const shape of SHAPES) {
@@ -119,22 +109,10 @@ export class SpellTemplateBar extends FloatingBar {
     trash.addEventListener("click", (ev) => { ev.preventDefault(); this.clearMine(); });
     bar.appendChild(trash);
 
-    // Toggle minimiser / ré-étendre (toujours visible). L'icône est posée par
-    // updateCollapseIcon selon l'orientation et l'état.
-    const toggle = document.createElement("div");
-    toggle.className = "tb-toggle fb-toggle";
-    toggle.dataset.tooltip = t("ATS.bar.collapse");
-    toggle.appendChild(document.createElement("i"));
-    toggle.addEventListener("click", () => this.toggleCollapsed());
-    this.toggleIcon = toggle;
-    bar.appendChild(toggle);
-    this.updateCollapseIcon(this.isCollapsed());
-
     this.applyButtonSize();
+    // État replié mémorisé posé AVANT applyDock (la disposition tient compte de la taille repliée).
+    this.applyCollapsedState();
     this.applyDock();
-
-    // État minimisé mémorisé.
-    if (localStorage.getItem(this.collapsedKey) === "1") this.setCollapsed(true);
 
     this.attachViewportHandlers();
     this.registerHooks();
@@ -177,14 +155,8 @@ export class SpellTemplateBar extends FloatingBar {
   get dockSettingKey() { return "templateDock"; }
   get orientSettingKey() { return "templateOrientation"; }
 
-  // ── Minimiser (skeleton dans FloatingBar) ──────────────────────────────────
+  // ── Minimiser (skeleton + icône dans FloatingBar) ──────────────────────────
   get collapsedClass() { return "stb-collapsed"; }
-
-  updateCollapseIcon(on) {
-    const icon = this.toggleIcon?.querySelector("i");
-    if (icon) icon.className = this.collapseChevronClass();
-    if (this.toggleIcon) this.toggleIcon.dataset.tooltip = on ? t("ATS.bar.expand") : t("ATS.bar.collapse");
-  }
 
   // ── Activation du mode gabarit ─────────────────────────────────────────────
   async activateTool(shape) {

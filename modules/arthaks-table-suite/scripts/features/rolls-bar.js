@@ -14,6 +14,12 @@
  * (objets Roll évalués) et ses `flags.dnd5e` (type de jet, activité/objet source,
  * message d'origine reliant attaque et dégâts).
  *
+ * ⚠️ INCOMPATIBILITÉ — modules qui remplacent les cartes de jet natives de dnd5e :
+ * la capture repose sur la structure du message natif (`flags.dnd5e.roll.type`). Un module
+ * de jet tiers qui reformate ou supprime cette carte casse la capture : la barre reste
+ * bloquée sur « En attente d'un jet… ». Cas confirmé : **Ready Set Roll Reforged**
+ * (`rsreforged`). À désactiver sur le monde pour utiliser cette barre.
+ *
  * Étape 1-2 (ce fichier) : squelette de barre + capture des jets d'ATTAQUE, affichés
  * en pile de lignes (action + d20 + total + indicateur d'état), chaque ligne retirable
  * par ✕. L'avantage/désavantage à la demande, les dégâts et l'application viennent aux
@@ -589,10 +595,9 @@ export class RollsBar extends FloatingBar {
     this.el.replaceChildren();
     this.el.style.display = "flex";
 
-    // Poignée (toujours visible) + bouton ↻ (visible ancrée) + pastille d'identité (repliée).
-    this.el.appendChild(this.makeHandle("rb-handle"));
-    this.el.appendChild(this.makeRotateButton("rb-rotate"));
-    this.el.appendChild(this.makeBadge("fa-dice-d20"));
+    // En-tête commun (poignée · ↻ · pastille · repli) sur une ligne, AVANT le contenu.
+    // La barre des jets n'a pas de titre : la pile suit directement l'en-tête.
+    this.el.appendChild(this.makeHeader("rb", { icon: "fa-dice-d20" }));
 
     // Pile de lignes (repliable).
     const list = document.createElement("div");
@@ -607,18 +612,8 @@ export class RollsBar extends FloatingBar {
     }
     this.el.appendChild(list);
 
-    // Toggle minimiser / ré-étendre (icône posée après attache au DOM).
-    const collapsed = localStorage.getItem(this.collapsedKey) === "1";
-    const toggle = document.createElement("div");
-    toggle.className = "rb-toggle fb-toggle";
-    toggle.dataset.tooltip = collapsed ? t("ATS.bar.expand") : t("ATS.bar.collapse");
-    toggle.appendChild(document.createElement("i"));
-    toggle.addEventListener("click", () => this.toggleCollapsed());
-    this.el.appendChild(toggle);
-
-    this.el.classList.toggle("rb-collapsed", collapsed);
-    this.el.classList.toggle("fb-collapsed", collapsed);
-    this.updateCollapseIcon(collapsed);
+    // Application de l'état replié mémorisé (le bouton de repli est dans l'en-tête).
+    this.applyCollapsedState();
 
     // Placement + orientation une fois le contenu construit (dimensions connues).
     this.applyDock();
@@ -698,8 +693,9 @@ export class RollsBar extends FloatingBar {
 
     const wrap = document.createElement("div");
     wrap.className = `rb-attack rb-mode-${attack.mode}`;
-    // Survol du bloc d'attaque : la carte de l'action (comme le chat), plus la formule.
-    this.applyActionTooltip(wrap, entry);
+    // Survol du bloc d'attaque : la FORMULE du jet (pas la carte de l'action, réservée à la
+    // section action — voir applyActionTooltip).
+    if (attack.formula) wrap.dataset.tooltip = attack.formula;
 
     const totalEl = document.createElement("span");
     totalEl.className = "rb-atk-total";
@@ -1024,15 +1020,8 @@ export class RollsBar extends FloatingBar {
     }
   }
 
-  // ── Minimiser (squelette dans FloatingBar) ─────────────────────────────────
+  // ── Minimiser (squelette + icône dans FloatingBar) ─────────────────────────
   get collapsedClass() { return "rb-collapsed"; }
-
-  updateCollapseIcon(on) {
-    const icon = this.el?.querySelector(".rb-toggle i");
-    if (icon) icon.className = this.collapseChevronClass();
-    const toggle = this.el?.querySelector(".rb-toggle");
-    if (toggle) toggle.dataset.tooltip = on ? t("ATS.bar.expand") : t("ATS.bar.collapse");
-  }
 
   // ── Position / ancrage ─────────────────────────────────────────────────────
   get dockSettingKey() { return "rollsDock"; }
