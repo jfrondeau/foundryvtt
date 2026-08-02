@@ -16,6 +16,7 @@ import { BARS } from "./features/registry.js";
 import { SpellTemplateBar } from "./features/template-bar.js";
 import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
+import { RollsBar } from "./features/rolls-bar.js";
 import { HideHud, HideConfig, HIDE_DEFAULTS } from "./features/hide-hud.js";
 import { makeSettingsPanel } from "./lib/settings-panel.js";
 import { FloatingBar } from "./lib/floating-bar.js";
@@ -69,6 +70,11 @@ const TokenBarConfig = makeSettingsPanel(
   ],
 );
 
+const RollsBarConfig = makeSettingsPanel(
+  "ats-rolls-config", "ATS.panel.rolls.title", "fa-solid fa-dice-d20",
+  ["rollsDock", "rollsOrientation", "dockMargin", "rollsSkipDialog", "rollsMaxEntries"],
+);
+
 /**
  * Descripteur du bouton « Configurer… » (registerMenu) de chaque barre, associé à
  * sa classe. Chaque bouton ouvre le panneau de réglages propres à la barre.
@@ -85,6 +91,10 @@ const BAR_MENUS = new Map([
   [TokenActionBar, {
     menuKey: "tokenBarMenu", panel: TokenBarConfig, icon: "fa-solid fa-hand-fist",
     label: "ATS.menu.token.label", hint: "ATS.menu.token.hint",
+  }],
+  [RollsBar, {
+    menuKey: "rollsBarMenu", panel: RollsBarConfig, icon: "fa-solid fa-dice-d20",
+    label: "ATS.menu.rolls.label", hint: "ATS.menu.rolls.hint",
   }],
 ]);
 
@@ -319,6 +329,27 @@ export function registerSettings() {
     hint: "ATS.settings.alwaysShowFeatureNames.hint",
     scope: "client", config: false, type: String, default: "Multiattack, Spellcasting",
     onChange: reRenderToken,
+  });
+
+  // ── Barre des jets (panneau RollsBarConfig) ─────────────────────────────────
+  const reRenderRolls = () => RollsBar.instance?.render();
+
+  registerDock("rollsDock", "ATS.dock.name", "free",
+    () => RollsBar.instance?.applyDock());
+  registerOrientation("rollsOrientation",
+    () => RollsBar.instance?.applyDock());
+
+  game.settings.register(MODULE_ID, "rollsSkipDialog", {
+    name: "ATS.settings.rollsSkipDialog.name",
+    hint: "ATS.settings.rollsSkipDialog.hint",
+    scope: "client", config: false, type: Boolean, default: true,
+  });
+
+  game.settings.register(MODULE_ID, "rollsMaxEntries", {
+    name: "ATS.settings.rollsMaxEntries.name",
+    hint: "ATS.settings.rollsMaxEntries.hint",
+    scope: "client", config: false, type: Number, default: 3,
+    onChange: reRenderRolls,
   });
 
   // ── Masquage de l'interface par AUDIENCE (matrice, scope monde) ─────────────

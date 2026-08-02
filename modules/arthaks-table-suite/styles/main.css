@@ -561,11 +561,13 @@
    Garantit que poignée et toggle ont la même taille et s'alignent d'une barre à l'autre. */
 #spell-template-bar .fb-handle,
 #combat-overlay .fb-handle,
-#selected-token-actions .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
+#selected-token-actions .fb-handle,
+#ats-rolls-bar .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
 
 #spell-template-bar .fb-toggle,
 #combat-overlay .fb-toggle,
-#selected-token-actions .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
+#selected-token-actions .fb-toggle,
+#ats-rolls-bar .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
 
 /* ── État minimisé : poignée + pastille d'identité + toggle ────────────────────── */
 #selected-token-actions.ab-collapsed { gap: 4px; padding: 3px 5px; }
@@ -587,6 +589,180 @@
   border-left: none; padding-left: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 6px;
 }
+
+/* ╔═══ BARRE DES JETS ═════════════════════════════════════════════════════╗ */
+/* ── Barre de capture / affichage des jets (attaque + dégâts) ─────────────────── */
+#ats-rolls-bar {
+  position: fixed; z-index: 70;
+  display: flex; align-items: center; gap: 6px;
+  max-width: 96vw; padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65); border: 1px solid #7a7a7a; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: all; user-select: none;
+  color: #e9ebf2; font-size: 12px;
+}
+
+#ats-rolls-bar .rb-handle {
+  flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#ats-rolls-bar .rb-handle:hover { color: #fff; }
+#ats-rolls-bar .rb-handle:active { cursor: grabbing; color: #ff6400; }
+
+/* Pile de lignes de jet : empilées verticalement, la plus récente en haut. La zone
+   défile quand la pile dépasse (au lieu d'allonger la barre hors écran). */
+#ats-rolls-bar .rb-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 60vh; overflow-y: auto; min-width: 0;
+}
+#ats-rolls-bar .rb-empty {
+  font-size: 12px; color: #999; font-style: italic; padding: 4px 8px; white-space: nowrap;
+}
+
+/* Une ligne = un jet : ✕ · action (icône + nom) · attaque (· dégâts · application à venir). */
+#ats-rolls-bar .rb-entry {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 6px; border-radius: 6px; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05); border-left: 3px solid #5b9bd8;
+}
+
+#ats-rolls-bar .rb-remove { flex: 0 0 auto; cursor: pointer; color: #8b93a5; font-size: 12px; }
+#ats-rolls-bar .rb-remove:hover { color: #ff7e7e; }
+
+#ats-rolls-bar .rb-action { display: flex; align-items: center; gap: 5px; min-width: 0; }
+#ats-rolls-bar .rb-action-img {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 4px;
+  background-size: cover; background-position: center; border: 1px solid rgba(0, 0, 0, 0.6);
+}
+#ats-rolls-bar .rb-action-name {
+  font-weight: 700; max-width: 150px; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Bloc d'attaque : total mis en avant, détail des d20, bonus plat, indicateur d'état. */
+#ats-rolls-bar .rb-attack {
+  display: flex; align-items: center; gap: 6px;
+  padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+#ats-rolls-bar .rb-atk-total {
+  font-weight: 800; font-size: 16px; color: #ffd479;
+  font-variant-numeric: tabular-nums; min-width: 22px; text-align: center;
+}
+#ats-rolls-bar .rb-atk-dice { color: #cdd2dd; font-variant-numeric: tabular-nums; }
+#ats-rolls-bar .rb-atk-dice .rb-kept { color: #fff; font-weight: 700; }
+#ats-rolls-bar .rb-atk-dice .rb-drop { opacity: .5; text-decoration: line-through; }
+#ats-rolls-bar .rb-atk-bonus { color: #9aa3b2; }
+#ats-rolls-bar .rb-atk-mode {
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  padding: 1px 5px; border-radius: 8px; border: 1px solid;
+}
+#ats-rolls-bar .rb-mode-normal .rb-atk-mode { color: #b6bccb; border-color: #4a5263; }
+#ats-rolls-bar .rb-mode-advantage .rb-atk-mode {
+  color: #b6f0c4; border-color: rgba(76, 201, 106, 0.6); background: rgba(76, 201, 106, 0.15);
+}
+#ats-rolls-bar .rb-mode-disadvantage .rb-atk-mode {
+  color: #f0b3b3; border-color: rgba(201, 74, 76, 0.6); background: rgba(201, 74, 76, 0.15);
+}
+
+/* Sélecteur d'état cliquable (normal / avantage / désavantage) : segment actif surligné. */
+#ats-rolls-bar .rb-mode-ctl { display: inline-flex; align-items: center; gap: 2px; }
+#ats-rolls-bar .rb-mode-seg {
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
+  padding: 1px 5px; border-radius: 8px; border: 1px solid #4a5263; color: #8b93a5; cursor: pointer;
+}
+#ats-rolls-bar .rb-mode-seg:hover { color: #fff; border-color: #ff6400; }
+#ats-rolls-bar .rb-mode-seg.rb-mode-on { color: #1a0d00; background: #ffd479; border-color: #ffd479; }
+
+/* Cibles : touche/échec vs CA, recalculé selon l'état courant. */
+#ats-rolls-bar .rb-targets {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+#ats-rolls-bar .rb-target {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px; border-radius: 8px; font-size: 11px; border: 1px solid;
+  font-variant-numeric: tabular-nums;
+}
+#ats-rolls-bar .rb-target i { font-size: 10px; }
+#ats-rolls-bar .rb-target.rb-hit { color: #b6f0c4; border-color: rgba(76, 201, 106, 0.6); background: rgba(76, 201, 106, 0.15); }
+#ats-rolls-bar .rb-target.rb-miss { color: #f0b3b3; border-color: rgba(201, 74, 76, 0.6); background: rgba(201, 74, 76, 0.15); }
+#ats-rolls-bar .rb-target.rb-unknown { color: #b6bccb; border-color: #4a5263; }
+#ats-rolls-bar .rb-target-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ats-rolls-bar .rb-target-ac { opacity: .8; }
+
+/* Dégâts : résumé cliquable (sous-total par type + total entre parenthèses) et détail par dé. */
+#ats-rolls-bar .rb-damage {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+#ats-rolls-bar .rb-dmg-summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+#ats-rolls-bar .rb-dmg-caret { color: #8b93a5; font-size: 11px; width: 8px; text-align: center; }
+#ats-rolls-bar .rb-dmg-summary:hover .rb-dmg-caret { color: #fff; }
+#ats-rolls-bar .rb-dmg-type { font-weight: 700; color: #ffb38a; font-variant-numeric: tabular-nums; }
+#ats-rolls-bar .rb-dmg-lbl {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .3px; color: #c9a58b; font-weight: 700;
+}
+#ats-rolls-bar .rb-dmg-total { font-weight: 800; color: #ff9a6a; font-variant-numeric: tabular-nums; }
+#ats-rolls-bar .rb-heal .rb-dmg-type { color: #9be0b8; }
+#ats-rolls-bar .rb-heal .rb-dmg-total { color: #64d6a0; }
+#ats-rolls-bar .rb-dmg-crit {
+  font-size: 9px; font-weight: 800; text-transform: uppercase;
+  color: #1a0d00; background: #ff7a1a; border-radius: 6px; padding: 0 4px;
+}
+#ats-rolls-bar .rb-dmg-detail { display: flex; flex-direction: column; gap: 1px; padding-left: 14px; }
+#ats-rolls-bar .rb-dmg-line { font-size: 10px; color: #cdd2dd; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Barre d'application : toggles (dégât/soin, cible) + multiplicateurs (appliquent au clic). */
+#ats-rolls-bar .rb-apply { display: inline-flex; align-items: center; gap: 3px; margin-top: 1px; }
+#ats-rolls-bar .rb-apply-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 4px; cursor: pointer;
+  color: #cdd2dd; border: 1px solid #4a5263; font-size: 10px;
+}
+#ats-rolls-bar .rb-apply-toggle:hover { color: #fff; border-color: #ff6400; }
+#ats-rolls-bar .rb-mult {
+  padding: 1px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700;
+  color: #ffcf9a; border: 1px solid rgba(201, 74, 76, 0.5); background: rgba(201, 74, 76, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+#ats-rolls-bar .rb-mult:hover { color: #fff; border-color: #ff8c8c; background: rgba(201, 74, 76, 0.3); }
+/* Mode soin : multiplicateurs teintés en vert. */
+#ats-rolls-bar .rb-apply-heal .rb-mult {
+  color: #9be0b8; border-color: rgba(100, 214, 160, 0.5); background: rgba(100, 214, 160, 0.12);
+}
+#ats-rolls-bar .rb-apply-heal .rb-mult:hover { color: #fff; border-color: #64d6a0; background: rgba(100, 214, 160, 0.3); }
+
+/* Boutons de lancer des dégâts (avant que les dés ne soient roulés). */
+#ats-rolls-bar .rb-rolldmg {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+#ats-rolls-bar .rb-rd-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 4px; cursor: pointer;
+  font-size: 11px; font-weight: 700; border: 1px solid;
+}
+#ats-rolls-bar .rb-rd-btn i { font-size: 10px; }
+#ats-rolls-bar .rb-rd-dmg { color: #ffcf9a; border-color: rgba(201, 74, 76, 0.5); background: rgba(201, 74, 76, 0.14); }
+#ats-rolls-bar .rb-rd-dmg:hover { color: #fff; border-color: #ff8c8c; background: rgba(201, 74, 76, 0.3); }
+#ats-rolls-bar .rb-rd-crit { color: #ffd479; border-color: rgba(255, 122, 26, 0.6); background: rgba(255, 122, 26, 0.15); }
+#ats-rolls-bar .rb-rd-crit:hover { color: #fff; border-color: #ff9a4a; background: rgba(255, 122, 26, 0.3); }
+#ats-rolls-bar .rb-rd-heal { color: #9be0b8; border-color: rgba(100, 214, 160, 0.5); background: rgba(100, 214, 160, 0.12); }
+#ats-rolls-bar .rb-rd-heal:hover { color: #fff; border-color: #64d6a0; background: rgba(100, 214, 160, 0.3); }
+
+#ats-rolls-bar .rb-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  color: #ccc; border: 1px solid #666; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+#ats-rolls-bar .rb-toggle:hover { color: #fff; border-color: #ff6400; }
+
+/* État minimisé : poignée + pastille d'identité + toggle (même silhouette que les autres barres). */
+#ats-rolls-bar.rb-collapsed { gap: 4px; padding: 3px 5px; }
+#ats-rolls-bar.rb-collapsed .rb-collapsible { display: none; }
+
+/* Orientation verticale (ancrage gauche / droite) : les lignes restent empilées ;
+   seule la barre elle-même s'organise en colonne (poignée au-dessus du contenu). */
+#ats-rolls-bar.fb-vertical { flex-direction: column; align-items: stretch; }
 
 /* ╔═══ MASQUAGE DE L'INTERFACE (matrice par audience) ═════════════════════╗ */
 /* Le masquage lui-même est injecté dynamiquement (#ahh-audience-hide) : pas de

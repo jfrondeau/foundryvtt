@@ -14,6 +14,7 @@
  */
 import { registerSettings, registerKeybindings } from "./settings.js";
 import { HideHud } from "./features/hide-hud.js";
+import { RollsBar } from "./features/rolls-bar.js";
 
 Hooks.once("init", () => {
   registerSettings();
@@ -21,6 +22,9 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("ready", () => {
+  // Court-circuit de la fenêtre de configuration de jet dnd5e (fast-forward), indépendant de
+  // l'affichage de la barre des jets, donc enregistré ici plutôt que dans son cycle de vie.
+  RollsBar.installRollShortcuts();
   // Plus de réglage « Activer » : HideHud.apply() démarre les barres que l'audience de ce
   // client affiche (et masque le reste de l'interface selon la matrice).
   HideHud.apply();

@@ -16,10 +16,12 @@
 import { SpellTemplateBar } from "./template-bar.js";
 import { CombatOverlay } from "./combat-bar.js";
 import { TokenActionBar } from "./token-bar.js";
+import { RollsBar } from "./rolls-bar.js";
 
 // `label` est une clé i18n (localisée au point d'affichage, cf. hide-hud.js).
 export const BARS = [
   { cls: SpellTemplateBar, barKey: "template", label: "ATS.menu.template.label" },
   { cls: CombatOverlay,    barKey: "combat",   label: "ATS.menu.combat.label" },
   { cls: TokenActionBar,   barKey: "token",    label: "ATS.menu.token.label" },
+  { cls: RollsBar,         barKey: "rolls",    label: "ATS.menu.rolls.label" },
 ];
