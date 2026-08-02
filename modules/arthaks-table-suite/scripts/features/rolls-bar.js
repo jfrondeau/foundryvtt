@@ -294,6 +294,7 @@ export class RollsBar extends FloatingBar {
         actionName: action.name,
         actionImg: action.img,
         actionDesc: action.desc,
+        actionUuid: action.uuid,
         // Contrôles interactifs (bascule d'état, lancer/appliquer les dégâts) réservés au MJ ou
         // au propriétaire de l'acteur du jet, comme le défaut dnd5e.
         canControl: this.canControl(msg),
@@ -357,6 +358,7 @@ export class RollsBar extends FloatingBar {
         actionName: action.name,
         actionImg: action.img,
         actionDesc: action.desc,
+        actionUuid: action.uuid,
         canControl: this.canControl(msg),
         targets: this.parseTargets(msg),
         attack: null,
@@ -442,7 +444,7 @@ export class RollsBar extends FloatingBar {
 
   /** Plafonne la pile au nombre de jets conservés (réglage), en retirant les plus anciens. */
   trim() {
-    const max = Math.max(1, Number(game.settings.get(MODULE_ID, "rollsMaxEntries")) || 3);
+    const max = Math.max(1, Number(game.settings.get(MODULE_ID, "rollsMaxEntries")) || 2);
     while (this.entries.length > max) {
       const dropped = this.entries.pop();
       if (dropped && this._byOrigin.get(dropped.id) === dropped) this._byOrigin.delete(dropped.id);
@@ -450,30 +452,38 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Résout l'action source d'un message (activité dnd5e 5.x, sinon objet), pour le nom,
-   * l'icône et la description affichés. Best-effort : retombe sur le `flavor` du message.
+   * Résout l'action source d'un message (activité dnd5e 5.x, sinon objet), pour le titre,
+   * l'icône et la carte de survol affichés. Best-effort : retombe sur le `flavor` du message.
+   *
+   * On privilégie l'OBJET source (le nom « Greataxe » et son icône) plutôt que l'activité
+   * générique (« Attack » et son icône de dé), pour coller à ce que le joueur a cliqué. L'UUID
+   * de l'objet permet le survol riche natif de dnd5e (carte identique au chat, voir renderEntry).
    * @param {ChatMessage} msg
-   * @returns {{ name: string, img: (string|null), desc: string }}
+   * @returns {{ name: string, img: (string|null), desc: string, uuid: (string|null) }}
    */
   resolveAction(msg) {
     const d = msg.flags?.dnd5e ?? {};
     let activity = null;
     let item = null;
+    let itemUuid = null;
     try {
       if (d.activity?.uuid) activity = fromUuidSync(d.activity.uuid, { strict: false });
       item = activity?.item ?? null;
+      itemUuid = item?.uuid ?? null;
+      if (!itemUuid) itemUuid = d.item?.uuid ?? d.use?.itemUuid ?? null;
       if (!item && d.item?.uuid) item = fromUuidSync(d.item.uuid, { strict: false });
       if (!item && d.use?.itemUuid) item = fromUuidSync(d.use.itemUuid, { strict: false });
     } catch { /* uuid non résoluble : on retombe sur le flavor */ }
 
-    const name = activity?.name || item?.name || msg.flavor || t("ATS.rolls.unknownAction");
-    const img = activity?.img || item?.img || null;
+    const name = item?.name || activity?.name || msg.flavor || t("ATS.rolls.unknownAction");
+    const img = item?.img || activity?.img || null;
 
+    // Description texte brut de repli (survol quand l'UUID n'est pas résoluble par dnd5e).
     let desc = "";
     const raw = item?.system?.description?.value;
     if (raw) desc = String(raw).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
 
-    return { name, img, desc };
+    return { name, img, desc, uuid: itemUuid };
   }
 
   /**
@@ -625,10 +635,10 @@ export class RollsBar extends FloatingBar {
     remove.addEventListener("click", () => this.removeEntry(entry));
     row.appendChild(remove);
 
-    // Action posée : icône + nom, détail (description) au survol.
+    // Action posée : icône + titre de l'objet source, carte de survol.
     const action = document.createElement("div");
     action.className = "rb-action";
-    action.dataset.tooltip = entry.actionDesc ? `${entry.actionName} — ${entry.actionDesc}` : entry.actionName;
+    this.applyActionTooltip(action, entry);
     if (entry.actionImg) {
       const img = document.createElement("div");
       img.className = "rb-action-img";
@@ -658,6 +668,25 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
+   * Pose le survol de l'action sur son bloc : quand l'UUID de l'objet source est connu, on
+   * réutilise le TOOLTIP RICHE NATIF de dnd5e (carte identique à celle du chat : titre, sous-type,
+   * description enrichie). Le système observe globalement l'activation du tooltip et remplace de
+   * lui-même le `<section class="loading" data-uuid>` par la carte de l'objet (voir Tooltips5e). En
+   * dernier recours (UUID non résoluble), on retombe sur un survol texte « Titre — description ».
+   * @param {HTMLElement} el     Élément porteur du survol (bloc action).
+   * @param {object} entry       Ligne de la pile.
+   */
+  applyActionTooltip(el, entry) {
+    if (entry.actionUuid) {
+      el.dataset.tooltip = `<section class="loading" data-uuid="${entry.actionUuid}"><i class="fas fa-spinner fa-spin-pulse"></i></section>`;
+      el.dataset.tooltipClass = "dnd5e2 dnd5e-tooltip item-tooltip themed theme-light";
+      el.dataset.tooltipDirection = "UP";
+    } else {
+      el.dataset.tooltip = entry.actionDesc ? `${entry.actionName} — ${entry.actionDesc}` : entry.actionName;
+    }
+  }
+
+  /**
    * Bloc d'attaque : total (dérivé du dé gardé), détail des d20 (dé gardé mis en avant, dé
    * écarté barré), bonus, et sélecteur d'état (cliquable si on contrôle l'acteur du jet).
    * @param {object} entry
@@ -669,7 +698,8 @@ export class RollsBar extends FloatingBar {
 
     const wrap = document.createElement("div");
     wrap.className = `rb-attack rb-mode-${attack.mode}`;
-    wrap.dataset.tooltip = attack.formula ?? "";
+    // Survol du bloc d'attaque : la carte de l'action (comme le chat), plus la formule.
+    this.applyActionTooltip(wrap, entry);
 
     const totalEl = document.createElement("span");
     totalEl.className = "rb-atk-total";

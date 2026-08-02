@@ -348,8 +348,9 @@ export function registerSettings() {
   game.settings.register(MODULE_ID, "rollsMaxEntries", {
     name: "ATS.settings.rollsMaxEntries.name",
     hint: "ATS.settings.rollsMaxEntries.hint",
-    scope: "client", config: false, type: Number, default: 3,
-    onChange: reRenderRolls,
+    scope: "client", config: false, type: Number, default: 2,
+    // Rogne aussitôt les lignes en trop (baisse de la limite) avant de re-rendre.
+    onChange: () => { RollsBar.instance?.trim(); reRenderRolls(); },
   });
 
   // ── Masquage de l'interface par AUDIENCE (matrice, scope monde) ─────────────
