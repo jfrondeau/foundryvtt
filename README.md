@@ -20,3 +20,9 @@ Avoir une vue Table, ou les joueur peuvent dessigner les gabarit de sort et dép
 
 pouvoir utiliser le shortcut / pour ajuster hp hors combat
 acces au setting pour la vue PJ.
+
+# Idées à ajouter
+
+- Raccourci clavier pour **sélectionner un outil** (sans la souris).
+- **Téléportation au clic** : sélectionner un ou plusieurs tokens, maintenir une touche raccourci, puis cliquer sur la carte → les tokens sont déplacés **immédiatement** à destination, sans animation de trajet ni blocage par les murs.
+- **Miroir sur 3 côtés** pour le « show to player » : étendre le mode table (aujourd'hui un seul coin opposé) à trois bords, pour les joueurs assis sur trois côtés de la table.

@@ -1,10 +1,9 @@
 # Déploie les modules du repo vers un userdata Foundry.
-# Cible LOCALE par défaut (l'install Foundry de cette machine) ; -Remote pour le serveur réseau.
-# Usage :  pwsh ./deploy.ps1                          (tous les modules -> local)
-#          pwsh ./deploy.ps1 arthaks-table-suite      (un seul module -> local)
-#          pwsh ./deploy.ps1 -Remote                  (tous les modules -> serveur 192.168.68.59)
+# Cible LOCALE par défaut (l'install Foundry de cette machine) ; -r / -Remote pour le serveur réseau.
+# Usage :  pwsh ./deploy.ps1          (tous les modules -> local)
+#          pwsh ./deploy.ps1 -r       (tous les modules -> serveur 192.168.68.59)
 param(
-    [string[]]$Modules,
+    [Alias("r")]
     [switch]$Remote
 )
 
@@ -16,8 +15,7 @@ $target    = if ($Remote) { "REMOTE" } else { "LOCAL" }
 Write-Host "Cible : $target ($destDir)" -ForegroundColor Yellow
 
 # Modules du repo à déployer (dossiers contenant un module.json).
-$all = @("arthaks-table-suite")
-if (-not $Modules -or $Modules.Count -eq 0) { $Modules = $all }
+$Modules = @("arthaks-table-suite")
 
 if (-not (Test-Path $destDir)) { throw "Share inaccessible : $destDir" }
 
