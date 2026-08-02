@@ -82,11 +82,11 @@
 #spell-template-bar .tb-btn {
   display: flex; align-items: center; justify-content: center;
   flex: 0 0 auto; width: var(--tb-btn); height: var(--tb-btn); color: #eee;
-  border: 2px solid #4a90d9; border-radius: 4px; cursor: pointer;
-  background: rgba(74, 144, 217, 0.15); transition: all .1s ease;
+  border: 2px solid #555; border-radius: 4px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); transition: all .1s ease;
 }
 #spell-template-bar .tb-btn:hover {
-  border-color: #7ec8ff; background: rgba(126, 200, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.12);
   color: #fff; transform: translateY(-2px);
 }
 #spell-template-bar .tb-btn.tb-active {
@@ -122,6 +122,68 @@
 #spell-template-bar.fb-vertical .tb-label { margin-right: 0; }
 #spell-template-bar.fb-vertical .tb-sep { width: auto; height: 1px; align-self: stretch; margin: 2px; }
 
+/* ╔═══ BARRE DES CONTRÔLES DE SCÈNE ═══════════════════════════════════════╗ */
+/* ── Réplique flottante des contrôles natifs (sc-) — calquée sur la barre de gabarits ── */
+#scene-controls-bar {
+  --sc-btn: 40px;
+  position: fixed; z-index: 70;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid #7a7a7a; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: all; user-select: none;
+  /* Beaucoup d'outils possibles : la barre défile au lieu de sortir de l'écran (cf. constrainSize). */
+  overflow: auto;
+}
+
+#scene-controls-bar .sc-handle {
+  flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#scene-controls-bar .sc-handle:hover { color: #fff; }
+#scene-controls-bar .sc-handle:active { cursor: grabbing; color: #ff6400; }
+
+#scene-controls-bar .sc-btn {
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: var(--sc-btn); height: var(--sc-btn); color: #eee;
+  border: 2px solid #555; border-radius: 4px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); transition: all .1s ease;
+}
+#scene-controls-bar .sc-btn:hover {
+  border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.12);
+  color: #fff; transform: translateY(-2px);
+}
+/* Outil actif (sélectionné) — orange, comme le natif (--control-active-*). */
+#scene-controls-bar .sc-btn.sc-active {
+  border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
+}
+/* Bascule (toggle) — bordure bleue PERMANENTE (marqueur « c'est un toggle », même OFF),
+   comme le natif (--toggle-border-color / --toggle-bg-color). Le fond ne vire au bleu qu'à l'état ON. */
+#scene-controls-bar .sc-btn.sc-toggle {
+  border-color: #5252d7; background: rgba(34, 34, 72, 0.55);
+}
+#scene-controls-bar .sc-btn.sc-toggle:hover {
+  border-color: #8484ff; background: rgba(82, 82, 215, 0.35); color: #fff;
+}
+/* Toggle ENCLENCHÉ (aria-pressed=true) — fond bleu plein + bordure bleu clair, comme le natif
+   (--toggle-active-bg-color / --toggle-active-border-color). Spécificité (3 classes) prioritaire. */
+#scene-controls-bar .sc-btn.sc-toggle.sc-active {
+  border-color: #8484ff; background: #5252d7; color: #fff;
+}
+/* Icône proportionnelle à la taille du bouton (16/40 = 0.4). */
+#scene-controls-bar .sc-btn i { font-size: calc(var(--sc-btn) * 0.4); pointer-events: none; }
+
+#scene-controls-bar .sc-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
+
+/* ── État minimisé : poignée + pastille d'identité + toggle ──────────────────── */
+#scene-controls-bar.sc-collapsed { gap: 4px; padding: 3px 5px; }
+#scene-controls-bar.sc-collapsed .sc-collapsible { display: none; }
+
+/* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
+#scene-controls-bar.fb-vertical { flex-direction: column; align-items: center; }
+#scene-controls-bar.fb-vertical .sc-sep { width: auto; height: 1px; align-self: stretch; margin: 2px; }
+
 /* ╔═══ SUIVI DE COMBAT ════════════════════════════════════════════════════╗ */
 /* ── Overlay de combat — layout « Rail » ─────────────────────────────────────── */
 #combat-overlay {
@@ -156,12 +218,21 @@
   background: rgba(14, 16, 22, 0.85);
   backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
 }
-/* Barre de navigation de tour : strip sous l'en-tête, boutons centrés. */
+/* Ligne d'actions du MJ : deux groupes (navigation · gestion) centrés, qui passent à
+   la ligne ENSEMBLE si la largeur de la barre ne suffit pas. Chaque groupe reste
+   insécable. CLEF : `width:0; min-width:100%` empêche la ligne d'ÉLARGIR la barre — elle
+   épouse la largeur fixée par les autres éléments (portrait, rail, en-tête) et se replie
+   en 2×2 dès qu'elle dépasserait, au lieu d'imposer sa propre largeur. Vaut pour les deux
+   orientations. `box-sizing: border-box` pour que le 100% inclue le padding. */
 #combat-overlay .co-nav {
-  display: flex; justify-content: center; gap: 8px;
+  box-sizing: border-box; width: 0; min-width: 100%;
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 5px 8px;
   padding: 5px 6px;
 }
-#combat-overlay .co-nav .co-btn { width: 34px; height: 34px; }
+#combat-overlay .co-nav-group { display: flex; flex-wrap: nowrap; gap: 5px; }
+#combat-overlay .co-nav .co-btn { width: 28px; height: 28px; }
+#combat-overlay .co-nav .co-btn i { font-size: 12px; }
 /* Coins arrondis seulement à l'extérieur ; jonctions internes franches. */
 #combat-overlay .co-header { border-radius: 8px 8px 0 0; }
 #combat-overlay .co-rail { border-radius: 0 0 0 8px; }
@@ -260,8 +331,13 @@
 #combat-overlay .co-ctl .co-btn { width: 30px; height: 30px; }
 #combat-overlay .co-ctl .co-btn.co-btn-start { color: #b6f0c4; background: rgba(76, 201, 106, 0.16); border-color: rgba(76, 201, 106, 0.55); }
 #combat-overlay .co-ctl .co-btn.co-btn-start:hover { background: rgba(76, 201, 106, 0.3); border-color: #4cc96a; color: #fff; }
-#combat-overlay .co-ctl .co-btn.co-btn-end { color: #f0b3b3; background: rgba(201, 74, 76, 0.14); border-color: rgba(201, 74, 76, 0.5); }
-#combat-overlay .co-ctl .co-btn.co-btn-end:hover { background: rgba(201, 74, 76, 0.3); border-color: #ff8c8c; color: #fff; }
+
+/* Boutons colorés partagés (vue prépa .co-ctl ET ligne d'actions .co-nav) :
+   ROUGE = fin de combat, JAUNE = passage en mode préparation. */
+#combat-overlay .co-btn.co-btn-end { color: #f0b3b3; background: rgba(201, 74, 76, 0.14); border-color: rgba(201, 74, 76, 0.5); }
+#combat-overlay .co-btn.co-btn-end:hover { background: rgba(201, 74, 76, 0.3); border-color: #ff8c8c; color: #fff; }
+#combat-overlay .co-btn.co-btn-prep { color: #ffe08a; background: rgba(255, 207, 107, 0.16); border-color: rgba(255, 207, 107, 0.5); }
+#combat-overlay .co-btn.co-btn-prep:hover { background: rgba(255, 207, 107, 0.3); border-color: var(--co-gold); color: #1a0d00; }
 
 /* ═══ Vue « combat » : rail fin ═════════════════════════════════════════════ */
 #combat-overlay .co-rail {
@@ -572,12 +648,14 @@
 #spell-template-bar .fb-handle,
 #combat-overlay .fb-handle,
 #selected-token-actions .fb-handle,
-#ats-rolls-bar .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
+#ats-rolls-bar .fb-handle,
+#scene-controls-bar .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
 
 #spell-template-bar .fb-toggle,
 #combat-overlay .fb-toggle,
 #selected-token-actions .fb-toggle,
-#ats-rolls-bar .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
+#ats-rolls-bar .fb-toggle,
+#scene-controls-bar .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
 
 /* ── État minimisé : poignée + pastille d'identité + toggle ────────────────────── */
 #selected-token-actions.ab-collapsed { gap: 4px; padding: 3px 5px; }

@@ -6,20 +6,22 @@
  * avec au moins un combattant) et reste visible pour TOUS les utilisateurs.
  *
  * Deux vues selon la phase (empreinte minimale sur la carte) :
- *  - « Setup » (Préparation, ou édition manuelle relancée en combat via ⋮) : liste
- *    large — vignette + nom + initiative ÉDITABLE — plus les contrôles de mise en
- *    place (rouler l'init des monstres, Commencer / Terminer, Fermer l'édition).
+ *  - « Setup » (Préparation avant le combat, ou mode préparation relancé en combat via le
+ *    dé) : liste large — vignette + nom + initiative ÉDITABLE — plus les contrôles de mise
+ *    en place (rouler l'init des monstres, Commencer / Terminer, retour au combat).
  *  - « Combat » : RAIL fin de vignettes (anneau PV coloré, ☠ si mort), le courant
  *    agrandi avec halo ember ; à côté, la carte du courant (grand portrait + CA/PV)
- *    et le panneau cible (T). L'initiative est masquée par défaut une fois lancé.
+ *    et le panneau cible (T). L'initiative est masquée par défaut une fois lancé. Sur la
+ *    ligne du round, un triangle déplie/replie la ligne d'actions du MJ (tour précédent /
+ *    suivant · fin de combat · dé « préparation »).
  *  - Les combattants cachés ne sont visibles que du MJ (grisés).
  *
- * Réglages notables (client) : afficher les portraits, masquer l'init en combat,
- * afficher le bouton « Tour suivant » (off par défaut : le raccourci « . » suffit).
+ * Réglages notables (client) : afficher les portraits, masquer l'init en combat, déplier
+ * la ligne d'actions du MJ par défaut (off par défaut : le raccourci « . » suffit).
  *
  * Automatisations au changement de tour :
  *  - Le token du combattant courant est SÉLECTIONNÉ (pour qui le possède).
- *  - La caméra se CENTRE sur ce token (MJ uniquement, pour piloter la vue de table).
+ *  - La caméra se CENTRE sur ce token, par audience (MJ / écran de table / autres joueurs).
  *
  * Raccourci clavier : « . » (Period) passe au tour suivant (réservé au MJ, qui
  * pilote le combat). « , » (Comma) revient au tour précédent (non lié par défaut).
@@ -32,6 +34,10 @@
 import { MODULE_ID } from "../const.js";
 import { makeNotify, t } from "../lib/common.js";
 import { FloatingBar } from "../lib/floating-bar.js";
+// NB : HideHud n'est PAS importé statiquement ici. Cela fermerait un cycle de chargement
+// registry→combat-bar→hide-hud→registry (hide-hud lit `BARS` au niveau module), qui lève
+// « Cannot access 'BARS' before initialization ». On le charge en import différé au runtime
+// (cf. onTurnChange), quand le module est déjà résolu.
 
 const notify = makeNotify("Combat");
 
@@ -87,7 +93,9 @@ export class CombatOverlay extends FloatingBar {
 
   constructor() {
     super("combat");
-    this.editMode = false;              // édition manuelle de l'init en cours de combat (bouton ⋮)
+    this.editMode = false;              // mode préparation en cours de combat (bouton dé)
+    // Ligne d'actions du MJ dépliée ? Défaut = réglage, basculé en direct par le triangle.
+    this.showControls = game.settings.get(MODULE_ID, "showNextButton");
     this._lastTurnId = null;            // id du combattant courant au dernier rendu
     this._lastVisibleCurrentId = null;  // dernier combattant courant VISIBLE (pour ce user)
     // Regroupe les rafales de hooks (création multiple de combattants, etc.).
@@ -234,10 +242,10 @@ export class CombatOverlay extends FloatingBar {
     const visible = this.visibleCombatants(combat);
     const markerId = this.resolveMarkerId(combat, visible);
 
-    // Boutons de tour (précédent/suivant) sur leur propre ligne sous l'en-tête,
-    // si l'option est activée (MJ, hors mode préparation/édition).
-    if (!setupView && game.user.isGM && game.settings.get(MODULE_ID, "showNextButton")) {
-      root.appendChild(this.renderCombatNav(combat));
+    // Ligne d'actions du MJ (préc · suiv · fin · préparation) sous l'en-tête, en vue
+    // combat, quand le triangle l'a dépliée (this.showControls, défaut = réglage).
+    if (!setupView && game.user.isGM && this.showControls) {
+      root.appendChild(this.renderCombatControls(combat));
     }
 
     const body = document.createElement("div");
@@ -293,7 +301,8 @@ export class CombatOverlay extends FloatingBar {
 
   /**
    * Ligne de statut de combat, SOUS l'en-tête (repliable) : libellé de round (occupe l'espace)
-   * + bouton d'options ⋮ (bascule combat ↔ édition) réservé au MJ en combat.
+   * + triangle de dépliage de la ligne d'actions du MJ (vue combat uniquement ; en mode
+   * préparation, le retour au combat passe par le dé des contrôles de mise en place).
    * @param {Combat} combat
    * @param {boolean} started
    * @param {boolean} editing
@@ -308,10 +317,15 @@ export class CombatOverlay extends FloatingBar {
       : (editing ? t("ATS.combat.editRound", { round: combat.round }) : t("ATS.combat.round", { round: combat.round }));
     status.appendChild(round);
 
-    if (game.user.isGM && started) {
-      const edit = this.makeBtn("fas fa-sliders", editing ? t("ATS.combat.backToCombat") : t("ATS.combat.editInit"), () => this.toggleEdit());
-      edit.classList.toggle("co-active", editing);
-      status.appendChild(edit);
+    // Triangle : déplie/replie la ligne d'actions du MJ, hors mode préparation.
+    if (game.user.isGM && started && !editing) {
+      const caret = this.makeBtn(
+        this.showControls ? "fas fa-caret-down" : "fas fa-caret-left",
+        t("ATS.combat.toggleControls"),
+        () => { this.showControls = !this.showControls; this.render(combat); },
+      );
+      caret.classList.add("co-caret");
+      status.appendChild(caret);
     }
 
     return status;
@@ -355,7 +369,12 @@ export class CombatOverlay extends FloatingBar {
     return wrap;
   }
 
-  /** Contrôles de mise en place (MJ) : 3 petits boutons icônes sur une ligne (tooltip). */
+  /**
+   * Contrôles de mise en place (MJ) : boutons icônes sur une ligne (tooltip).
+   * Avant le combat : rouler l'init des monstres + Commencer. En cours de combat (mode
+   * préparation), on ajoute le dé actif pour REVENIR au combat (symétrique du dé de la
+   * ligne d'actions) — l'ancien bouton ⋮ de bascule n'existe plus.
+   */
   renderSetupControls() {
     if (!game.user.isGM) return null;
     const combat = this.combat;
@@ -372,6 +391,10 @@ export class CombatOverlay extends FloatingBar {
       const end = this.makeBtn("fas fa-flag-checkered", t("ATS.combat.end"), () => this.endCombat(combat));
       end.classList.add("co-btn-end");
       ctl.appendChild(end);
+      // On édite un combat déjà lancé : dé actif pour revenir à la vue combat.
+      const back = this.makeBtn("fas fa-swords", t("ATS.combat.backToCombat"), () => this.toggleEdit());
+      back.classList.add("co-active");
+      ctl.appendChild(back);
     }
     return ctl;
   }
@@ -381,13 +404,33 @@ export class CombatOverlay extends FloatingBar {
     if (this.combat) this.render(this.combat);
   }
 
-  /** Ligne de navigation de tour (précédent + suivant) sous l'en-tête (option MJ). */
-  renderCombatNav(combat) {
+  /**
+   * Ligne d'actions du MJ dépliée par le triangle (vue combat), en DEUX groupes qui
+   * passent à la ligne ensemble si la largeur manque (jamais plus large que la barre) :
+   *  - navigation : tour précédent · tour suivant ;
+   *  - gestion    : fin de combat · dé « préparation » (bascule vers la liste éditable).
+   * Rouler l'init des monstres reste dans la vue préparation.
+   */
+  renderCombatControls(combat) {
     const nav = document.createElement("div");
     nav.className = "co-nav co-collapsible";
     const step = (fn) => () => Promise.resolve(fn()).catch((err) => { notify.warn(t("ATS.combat.turnChangeFail")); console.error(err); });
-    nav.appendChild(this.makeBtn("fas fa-backward-step", t("ATS.combat.prevTurn"), step(() => combat.previousTurn())));
-    nav.appendChild(this.makeBtn("fas fa-forward-step", t("ATS.combat.nextTurn"), step(() => combat.nextTurn())));
+    const group = () => { const g = document.createElement("div"); g.className = "co-nav-group"; return g; };
+
+    const nav1 = group();
+    nav1.appendChild(this.makeBtn("fas fa-backward-step", t("ATS.combat.prevTurn"), step(() => combat.previousTurn())));
+    nav1.appendChild(this.makeBtn("fas fa-forward-step", t("ATS.combat.nextTurn"), step(() => combat.nextTurn())));
+
+    const nav2 = group();
+    const end = this.makeBtn("fas fa-flag-checkered", t("ATS.combat.end"), () => this.endCombat(combat));
+    end.classList.add("co-btn-end");
+    nav2.appendChild(end);
+    const prep = this.makeBtn("fas fa-dice-d20", t("ATS.combat.prepMode"), () => this.toggleEdit());
+    prep.classList.add("co-btn-prep");
+    nav2.appendChild(prep);
+
+    nav.appendChild(nav1);
+    nav.appendChild(nav2);
     return nav;
   }
 
@@ -1045,9 +1088,15 @@ export class CombatOverlay extends FloatingBar {
         token.control({ releaseOthers: true });
       } catch (e) { console.warn("[Combat Overlay] control:", e); }
     }
-    if (game.settings.get(MODULE_ID, "autoPanToken") && game.user.isGM) {
-      try { canvas.animatePan({ x: token.center.x, y: token.center.y }); } catch (e) { console.warn("[Combat Overlay] pan:", e); }
-    }
+    // Centrage caméra : réglé par audience (MJ / écran de table / autres joueurs) — ce
+    // client résout la sienne et lit le booléen correspondant. HideHud en import différé
+    // (cache de la promesse) pour éviter le cycle de chargement — voir en-tête du fichier.
+    (this._hideHudMod ??= import("./hide-hud.js")).then(({ HideHud }) => {
+      const panKey = { gm: "panCameraGm", tv: "panCameraTv", others: "panCameraOthers" }[HideHud.currentAudienceKey()];
+      if (panKey && game.settings.get(MODULE_ID, panKey)) {
+        try { canvas.animatePan({ x: token.center.x, y: token.center.y }); } catch (e) { console.warn("[Combat Overlay] pan:", e); }
+      }
+    });
   }
 
   /** Double-clic : ouvre la feuille de l'acteur (si l'utilisateur a au moins un accès limité). */

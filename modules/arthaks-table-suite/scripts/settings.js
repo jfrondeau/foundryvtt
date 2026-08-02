@@ -17,6 +17,7 @@ import { SpellTemplateBar } from "./features/template-bar.js";
 import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
 import { RollsBar } from "./features/rolls-bar.js";
+import { SceneControlsBar } from "./features/controls-bar.js";
 import { HideHud, HideConfig, HIDE_DEFAULTS } from "./features/hide-hud.js";
 import { makeSettingsPanel } from "./lib/settings-panel.js";
 import { FloatingBar } from "./lib/floating-bar.js";
@@ -57,7 +58,7 @@ const CombatBarConfig = makeSettingsPanel(
   [
     "combatDock", "combatOrientation", "dockMargin", "combatCurrentInline", "showImages", "imageMode", "featuredImageMode",
     "hideInitInCombat", "showNextButton", "rowSize", "currentImageSize",
-    "autoControlToken", "autoPanToken",
+    "autoControlToken", "panCameraGm", "panCameraTv", "panCameraOthers",
   ],
 );
 
@@ -73,6 +74,11 @@ const TokenBarConfig = makeSettingsPanel(
 const RollsBarConfig = makeSettingsPanel(
   "ats-rolls-config", "ATS.panel.rolls.title", "fa-solid fa-dice-d20",
   ["rollsDock", "rollsOrientation", "dockMargin", "rollsSkipDialog", "rollsMaxEntries"],
+);
+
+const ControlsBarConfig = makeSettingsPanel(
+  "ats-controls-config", "ATS.panel.controls.title", "fa-solid fa-sliders",
+  ["controlsDock", "controlsOrientation", "dockMargin", "controlsButtonSize"],
 );
 
 /**
@@ -95,6 +101,10 @@ const BAR_MENUS = new Map([
   [RollsBar, {
     menuKey: "rollsBarMenu", panel: RollsBarConfig, icon: "fa-solid fa-dice-d20",
     label: "ATS.menu.rolls.label", hint: "ATS.menu.rolls.hint",
+  }],
+  [SceneControlsBar, {
+    menuKey: "controlsBarMenu", panel: ControlsBarConfig, icon: "fa-solid fa-sliders",
+    label: "ATS.menu.controls.label", hint: "ATS.menu.controls.hint",
   }],
 ]);
 
@@ -120,14 +130,15 @@ function registerDock(key, name, def, onChange) {
  * Enregistre le réglage d'ORIENTATION d'une barre (indépendant du bord ; bouton ↻).
  * @param {string} key      Clé du réglage (déclarée par la barre via `orientSettingKey`).
  * @param {() => void} onChange Rappel appliquant l'orientation sur l'instance vivante.
+ * @param {string} [def]    Orientation par défaut (« h » | « v »).
  */
-function registerOrientation(key, onChange) {
+function registerOrientation(key, onChange, def = "h") {
   game.settings.register(MODULE_ID, key, {
     name: "ATS.orient.name",
     hint: "ATS.orient.hint",
     scope: "client", config: false, type: String,
     choices: ORIENT_CHOICES,
-    default: "h",
+    default: def,
     onChange,
   });
 }
@@ -238,7 +249,8 @@ export function registerSettings() {
     name: "ATS.settings.showNextButton.name",
     hint: "ATS.settings.showNextButton.hint",
     scope: "world", config: false, type: Boolean, default: false,
-    onChange: syncCombat,
+    // Ré-aligne l'état déplié courant de la barre sur le nouveau défaut, puis relaie.
+    onChange: (v) => { const i = CombatOverlay.instance; if (i) { i.showControls = v; i.sync(); } },
   });
 
   game.settings.register(MODULE_ID, "rowSize", {
@@ -261,10 +273,25 @@ export function registerSettings() {
     scope: "world", config: false, type: Boolean, default: true,
   });
 
-  game.settings.register(MODULE_ID, "autoPanToken", {
-    name: "ATS.settings.autoPanToken.name",
-    hint: "ATS.settings.autoPanToken.hint",
+  // Centrage caméra au changement de tour, réglé PAR AUDIENCE (comme le masquage) :
+  // chaque client résout la sienne (HideHud.currentAudienceKey) et lit le booléen
+  // correspondant. Remplace l'ancien « autoPanToken » unique (MJ seulement).
+  game.settings.register(MODULE_ID, "panCameraGm", {
+    name: "ATS.settings.panCameraGm.name",
+    hint: "ATS.settings.panCameraGm.hint",
     scope: "world", config: false, type: Boolean, default: true,
+  });
+
+  game.settings.register(MODULE_ID, "panCameraTv", {
+    name: "ATS.settings.panCameraTv.name",
+    hint: "ATS.settings.panCameraTv.hint",
+    scope: "world", config: false, type: Boolean, default: true,
+  });
+
+  game.settings.register(MODULE_ID, "panCameraOthers", {
+    name: "ATS.settings.panCameraOthers.name",
+    hint: "ATS.settings.panCameraOthers.hint",
+    scope: "world", config: false, type: Boolean, default: false,
   });
 
   // ── Barre d'action du token (panneau TokenBarConfig) ────────────────────────
@@ -353,6 +380,20 @@ export function registerSettings() {
     onChange: () => { RollsBar.instance?.trim(); reRenderRolls(); },
   });
 
+  // ── Barre des contrôles de scène (panneau ControlsBarConfig) ────────────────
+  // Défaut ancré au bord gauche, vertical, comme la colonne native qu'elle remplace.
+  registerDock("controlsDock", "ATS.dock.name", "left",
+    () => SceneControlsBar.instance?.applyDock());
+  registerOrientation("controlsOrientation",
+    () => SceneControlsBar.instance?.applyDock(), "v");
+
+  game.settings.register(MODULE_ID, "controlsButtonSize", {
+    name: "ATS.settings.controlsButtonSize.name",
+    hint: "ATS.settings.controlsButtonSize.hint",
+    scope: "client", config: false, type: Number, default: 40,
+    onChange: () => SceneControlsBar.instance?.applyButtonSize(),
+  });
+
   // ── Masquage de l'interface par AUDIENCE (matrice, scope monde) ─────────────
   // Le MJ configure ; chaque client résout son audience et applique sa colonne. La
   // matrice { gm, tv, others } et le joueur TV sont édités via le panneau dédié ;
@@ -409,6 +450,7 @@ export function registerSettings() {
     migrate("dockPosition", "tokenOrientation");
     migrate("templateDock", "templateOrientation");
     migrate("combatDock", "combatOrientation");
+    migrate("controlsDock", "controlsOrientation");
 
     // Migration de l'état d'ancrage localStorage : { pos (fraction), seq } → { align, order }.
     // L'ancre est dérivée de la fraction (tiers) ; l'ordre reprend le rang d'arrivée.
@@ -422,7 +464,26 @@ export function registerSettings() {
       const order = Number.isFinite(Number(state.seq)) ? Number(state.seq) : Date.now();
       localStorage.setItem(lsKey, JSON.stringify({ align, order }));
     };
-    ["template", "combat", "token"].forEach(migrateDockState);
+    ["template", "combat", "token", "controls"].forEach(migrateDockState);
+  });
+
+  // Migration du centrage caméra : ancien réglage monde unique « autoPanToken » (MJ
+  // uniquement) → colonne MJ des trois nouveaux réglages par audience. Best-effort, par
+  // le MJ. L'ancien réglage n'étant plus enregistré, on lit sa valeur brute dans la
+  // collection de réglages monde, puis on le purge pour ne pas re-migrer.
+  Hooks.once("ready", () => {
+    try {
+      if (!game.user.isGM) return;
+      const world = game.settings.storage.get("world");
+      const doc = world?.find?.((s) => s.key === `${MODULE_ID}.autoPanToken`);
+      if (!doc) return; // jamais réglé explicitement : les défauts des nouvelles clés suffisent
+      let val = doc.value;
+      if (typeof val === "string") { try { val = JSON.parse(val); } catch { /* garde la chaîne */ } }
+      game.settings.set(MODULE_ID, "panCameraGm", val === true);
+      doc.delete?.();
+    } catch (err) {
+      console.warn("[Arthak's Table] migration du centrage caméra:", err);
+    }
   });
 }
 

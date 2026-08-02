@@ -105,10 +105,13 @@ const TAB_KEYS = SIDEBAR_TABS.map((t) => `tab-${t.tab}`);
 export const HIDE_DEFAULTS = {
   gm: {},
   tv: Object.fromEntries(
-    ["navigation", "sceneControls", "logo", "players", "hotbar", "chatInput", "chatMenu", ...TAB_KEYS]
+    ["navigation", "sceneControls", "logo", "players", "hotbar", "chatInput", "chatMenu",
+      "bar-controls", ...TAB_KEYS]
       .map((k) => [k, true]),
   ),
-  others: {},
+  // La barre des contrôles de scène est réservée au MJ (murs, éclairage, tuiles… lui sont
+  // propres) : masquée par défaut pour les autres joueurs.
+  others: { "bar-controls": true },
 };
 
 export class HideHud {

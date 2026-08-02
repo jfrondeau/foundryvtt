@@ -10,7 +10,7 @@ Communiquer en **français**. Les commentaires (doc JSDoc en tête de chaque fic
 
 ## Commandes
 
-- **Déployer** : `pwsh ./deploy.ps1` (tous les modules) ou `pwsh ./deploy.ps1 arthaks-table-suite` (un seul). Cible **LOCALE par défaut** — l'install Foundry de cette machine, `%LOCALAPPDATA%\FoundryVTT\Data\modules`. Ajouter **`-Remote`** pour viser le serveur réseau (robocopy en miroir vers `\\192.168.68.59\foundryuserdata\Data\modules`). Puis **F5 dans Foundry** pour recharger.
+- **Déployer** : `pwsh ./deploy.ps1` (déploie tous les modules du repo — la liste est codée en dur dans le script, **aucun argument de module**). Ajouter **`-r`** / **`-Remote`** pour viser le serveur réseau. Cible **LOCALE par défaut** — l'install Foundry de cette machine, `%LOCALAPPDATA%\FoundryVTT\Data\modules` ; le serveur est `\\192.168.68.59\foundryuserdata\Data\modules` (robocopy en miroir). Puis **F5 dans Foundry** pour recharger.
 - **Pas de build, pas de lint, pas de tests** : ES modules purs chargés directement par Foundry. Aucune étape de compilation.
 - **Foundry n'est pas lançable depuis cet environnement.** On ne peut pas vérifier l'UI en direct ici. Ne pas enchaîner de refontes non testées : instrumenter avec des logs (`makeNotify`), avancer par petits pas, ou valider en simulation. Voir la note mémoire « Vérifier l'UI, pas itérer à l'aveugle ».
 
