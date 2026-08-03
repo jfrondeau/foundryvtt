@@ -195,6 +195,16 @@ export function registerSettings() {
     onChange: () => FloatingBar.layoutAll(),
   });
 
+  // Ancrage automatique des émanations de sort au token sélectionné (cf. EmanationAnchor).
+  // Réglage RACINE (config: true → visible directement sous « Arthak's Table Suite »),
+  // indépendant des barres. Portée MONDE : le MJ l'active pour toute la table. Pas d'onChange :
+  // les hooks du cycle d'usage dnd5e re-lisent le réglage à chaque lancer (bascule en direct).
+  game.settings.register(MODULE_ID, "autoAnchorEmanation", {
+    name: "ATS.settings.autoAnchorEmanation.name",
+    hint: "ATS.settings.autoAnchorEmanation.hint",
+    scope: "world", config: true, type: Boolean, default: false,
+  });
+
   // ── Barre de gabarits (panneau TemplateBarConfig) ───────────────────────────
   registerDock("templateDock", "ATS.dock.name", "free",
     () => SpellTemplateBar.instance?.applyDock());

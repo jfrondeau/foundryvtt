@@ -16,6 +16,7 @@ import { registerSettings, registerKeybindings } from "./settings.js";
 import { HideHud } from "./features/hide-hud.js";
 import { RollsBar } from "./features/rolls-bar.js";
 import { TokenTeleport } from "./features/teleport.js";
+import { EmanationAnchor } from "./features/emanation-anchor.js";
 
 Hooks.once("init", () => {
   registerSettings();
@@ -29,6 +30,9 @@ Hooks.once("ready", () => {
   // Téléport des tokens (MJ) : branche l'écoute des clics du plateau, indépendante de
   // l'affichage des barres — d'où l'installation ici plutôt que dans une barre.
   TokenTeleport.install();
+  // Ancrage automatique des émanations de sort au token sélectionné (réglage monde) :
+  // branche les hooks du cycle d'usage dnd5e, indépendants de l'affichage des barres.
+  EmanationAnchor.install();
   // Plus de réglage « Activer » : HideHud.apply() démarre les barres que l'audience de ce
   // client affiche (et masque le reste de l'interface selon la matrice).
   HideHud.apply();

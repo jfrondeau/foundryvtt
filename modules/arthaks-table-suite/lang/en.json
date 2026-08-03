@@ -32,6 +32,8 @@
   "ATS.settings.dockMargin.hint": "Gap between a docked bar and the screen edge. 0 = flush with the edge.",
   "ATS.settings.templateButtonSize.name": "Button size (px)",
   "ATS.settings.templateButtonSize.hint": "Size of the template bar buttons.",
+  "ATS.settings.autoAnchorEmanation.name": "Anchor emanations to token",
+  "ATS.settings.autoAnchorEmanation.hint": "When a spell with an « emanation » target is cast with template placement enabled, create an emanation Region centered on and attached to the selected token (it follows and rotates with it) instead of a template you drag into place by hand. The spell's « Place a Template » checkbox then appears unchecked: the anchoring replaces it. Anchor = the selected token (falling back to the caster's sole token).",
   "ATS.settings.combatCurrentInline.name": "Current shown in the list",
   "ATS.settings.combatCurrentInline.hint": "The combatant on their turn grows IN PLACE within the list, with floating targets to its right. Disabled: legacy display — current portrait and targets grouped in a right-hand column.",
   "ATS.settings.showImages.name": "Show portraits",
@@ -126,6 +128,10 @@
   "ATS.template.nothingToDelete": "No templates to delete.",
   "ATS.template.deleted": "{count} template(s) deleted.",
   "ATS.template.deleteFail": "Deletion failed.",
+
+  "ATS.emanation.ready": "Emanation anchoring ready.",
+  "ATS.emanation.regionName": "{spell} [{user}]",
+  "ATS.emanation.fail": "Could not anchor the emanation to the token.",
 
   "ATS.combat.ready": "Combat overlay ready.",
   "ATS.combat.turnChangeFail": "Could not change turn.",

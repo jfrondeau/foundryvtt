@@ -32,6 +32,8 @@
   "ATS.settings.dockMargin.hint": "Écart entre une barre ancrée et le bord de l'écran. 0 = collée au bord.",
   "ATS.settings.templateButtonSize.name": "Taille des boutons (px)",
   "ATS.settings.templateButtonSize.hint": "Taille des boutons de la barre de gabarits.",
+  "ATS.settings.autoAnchorEmanation.name": "Ancrer les émanations au token",
+  "ATS.settings.autoAnchorEmanation.hint": "Quand un sort à cible « émanation » est lancé avec le placement de gabarit prévu, crée une région d'émanation centrée et attachée au token sélectionné (elle le suit et tourne avec lui) au lieu d'un gabarit à glisser-déposer à la main. La case « Placer un gabarit » du sort apparaît alors décochée : l'ancrage la remplace. Ancre = le token sélectionné (à défaut, l'unique token du lanceur).",
   "ATS.settings.combatCurrentInline.name": "Courant affiché dans la liste",
   "ATS.settings.combatCurrentInline.hint": "Le combattant à son tour s'agrandit EN PLACE dans la liste, avec les cibles flottantes à sa droite. Désactivé : ancien affichage — portrait du courant et cibles regroupés dans une colonne à droite.",
   "ATS.settings.showImages.name": "Afficher les portraits",
@@ -126,6 +128,10 @@
   "ATS.template.nothingToDelete": "Aucun gabarit à supprimer.",
   "ATS.template.deleted": "{count} gabarit(s) supprimé(s).",
   "ATS.template.deleteFail": "Suppression impossible.",
+
+  "ATS.emanation.ready": "Ancrage des émanations prêt.",
+  "ATS.emanation.regionName": "{spell} [{user}]",
+  "ATS.emanation.fail": "Impossible d'ancrer l'émanation au token.",
 
   "ATS.combat.ready": "Overlay de combat prêt.",
   "ATS.combat.turnChangeFail": "Impossible de changer de tour.",
