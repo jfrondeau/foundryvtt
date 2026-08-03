@@ -18,6 +18,7 @@ import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
 import { RollsBar } from "./features/rolls-bar.js";
 import { SceneControlsBar } from "./features/controls-bar.js";
+import { TokenTeleport } from "./features/teleport.js";
 import { HideHud, HideConfig, HIDE_DEFAULTS } from "./features/hide-hud.js";
 import { makeSettingsPanel } from "./lib/settings-panel.js";
 import { FloatingBar } from "./lib/floating-bar.js";
@@ -77,7 +78,7 @@ const RollsBarConfig = makeSettingsPanel(
 );
 
 const ControlsBarConfig = makeSettingsPanel(
-  "ats-controls-config", "ATS.panel.controls.title", "fa-solid fa-sliders",
+  "ats-controls-config", "ATS.panel.controls.title", "fa-solid fa-toolbox",
   ["controlsDock", "controlsOrientation", "dockMargin", "controlsButtonSize"],
 );
 
@@ -103,7 +104,7 @@ const BAR_MENUS = new Map([
     label: "ATS.menu.rolls.label", hint: "ATS.menu.rolls.hint",
   }],
   [SceneControlsBar, {
-    menuKey: "controlsBarMenu", panel: ControlsBarConfig, icon: "fa-solid fa-sliders",
+    menuKey: "controlsBarMenu", panel: ControlsBarConfig, icon: "fa-solid fa-toolbox",
     label: "ATS.menu.controls.label", hint: "ATS.menu.controls.hint",
   }],
 ]);
@@ -487,8 +488,69 @@ export function registerSettings() {
   });
 }
 
+/**
+ * Contrôles de scène natifs exposés en raccourci d'activation (niveau 1). Chaque entrée
+ * enregistre un keybinding « activateControl.<name> » qui bascule le contrôle actif via
+ * `ui.controls.activate({ control })` — exactement comme un clic sur la barre des contrôles,
+ * donc opérationnel même colonne native masquée. La liste reprend les contrôles de base de
+ * Foundry PRÉSENTS sous dnd5e ; un nom absent donne un no-op inoffensif. Pas de contrôle
+ * « templates » : dnd5e remplace les gabarits de mesure par le mode gabarit du contrôle
+ * « regions » (cf. barre de gabarits). AUCUNE touche par défaut : l'utilisateur assigne la
+ * sienne dans « Configuration des contrôles ».
+ */
+const SCENE_CONTROL_KEYBINDS = [
+  { control: "tokens", nameKey: "ATS.keybind.control.tokens.name" },
+  { control: "tiles", nameKey: "ATS.keybind.control.tiles.name" },
+  { control: "drawings", nameKey: "ATS.keybind.control.drawings.name" },
+  { control: "walls", nameKey: "ATS.keybind.control.walls.name" },
+  { control: "lighting", nameKey: "ATS.keybind.control.lighting.name" },
+  { control: "sounds", nameKey: "ATS.keybind.control.sounds.name" },
+  { control: "regions", nameKey: "ATS.keybind.control.regions.name" },
+  { control: "notes", nameKey: "ATS.keybind.control.notes.name" },
+];
+
 /** Enregistre les raccourcis clavier de combat (appelé au hook « init »). */
 export function registerKeybindings() {
+  // ── Activation directe d'un contrôle de scène (niveau 1) ────────────────────
+  // Un raccourci par contrôle : la touche assignée bascule ce contrôle actif. Non
+  // « restricted » : les joueurs ont aussi des contrôles (tokens, gabarits) et peuvent
+  // assigner leurs propres touches (portée client par défaut des keybindings).
+  // ⚠️ Id SANS point : la config de Foundry passe le formulaire par expandObject, qui
+  // découpe les clés sur « . » → un id « activateControl.tokens » casse l'enregistrement
+  // (suppression / reset). On sépare donc par un tiret.
+  for (const { control, nameKey } of SCENE_CONTROL_KEYBINDS) {
+    game.keybindings.register(MODULE_ID, `activateControl-${control}`, {
+      name: nameKey,
+      hint: "ATS.keybind.control.hint",
+      editable: [],
+      onDown: () => { ui.controls?.activate?.({ control }); return true; },
+    });
+  }
+
+  // ── Mode gabarit (dnd5e : contrôle Regions) ─────────────────────────────────
+  // dnd5e n'a pas de contrôle « templates » : les gabarits se dessinent via le mode
+  // gabarit du contrôle Regions. Ce raccourci l'active directement (forme cercle), en
+  // réutilisant la logique de la barre de gabarits. Non « restricted » (joueurs inclus).
+  game.keybindings.register(MODULE_ID, "templateMode", {
+    name: "ATS.keybind.templateMode.name",
+    hint: "ATS.keybind.templateMode.hint",
+    editable: [],
+    onDown: () => { SpellTemplateBar.activateTemplateMode(); return true; },
+  });
+
+  // ── Téléport des tokens sélectionnés (MJ) ───────────────────────────────────
+  // Touche MAINTENUE : tant qu'elle est enfoncée, un clic gauche sur la scène téléporte
+  // les tokens sélectionnés à cet endroit (cf. TokenTeleport). Réservé au MJ.
+  game.keybindings.register(MODULE_ID, "teleportToken", {
+    name: "ATS.keybind.teleportToken.name",
+    hint: "ATS.keybind.teleportToken.hint",
+    editable: [],
+    restricted: true,
+    // Retourne false : touche modificatrice maintenue, on ne consomme pas l'événement.
+    onDown: () => { TokenTeleport.setHeld(true); return false; },
+    onUp: () => { TokenTeleport.setHeld(false); return false; },
+  });
+
   // « . » : tour suivant (le MJ pilote le combat → raccourci réservé au MJ).
   game.keybindings.register(MODULE_ID, "nextTurn", {
     name: "ATS.keybind.nextTurn.name",

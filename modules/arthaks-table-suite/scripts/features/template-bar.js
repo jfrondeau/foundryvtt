@@ -58,6 +58,34 @@ export class SpellTemplateBar extends FloatingBar {
     this.instance.render();
   }
 
+  /**
+   * Active le MODE GABARIT du contrôle Regions (dnd5e) — ouvre Regions, bascule
+   * `templateMode`, présélectionne une forme — SANS dépendre du DOM de la barre.
+   * Réutilisé par le raccourci clavier « templateMode » (cf. settings.js). Si la barre
+   * tourne, on délègue à son `activateTool` (surbrillance du bouton, gestion d'émanation,
+   * mémorisation de la couche de retour) ; sinon on rejoue la même séquence à sec.
+   * @param {string} [shape="circle"] Forme à présélectionner (cercle par défaut).
+   */
+  static async activateTemplateMode(shape = "circle") {
+    const regions = ui.controls.controls?.regions;
+    if (!regions) { notify.warn(t("ATS.template.regionsUnavailable")); return; }
+    if (this.instance) { await this.instance.activateTool(shape); return; }
+
+    try {
+      await ui.controls.activate({ control: "regions", tool: "select" });
+      const tm = ui.controls.control?.tools?.templateMode;
+      if (tm && !tm.active) {
+        tm.active = true;
+        try { await tm.onChange?.(null, true); } catch (e) { console.warn("[Spell Template Bar] templateMode onChange:", e); }
+      }
+      await ui.controls.activate({ control: "regions", tool: shape });
+      ui.controls.render();
+    } catch (err) {
+      notify.warn(t("ATS.template.activateFail"));
+      console.error(err);
+    }
+  }
+
   constructor() {
     super("template");
     this.returnLayer = null;      // couche à restaurer après le dessin

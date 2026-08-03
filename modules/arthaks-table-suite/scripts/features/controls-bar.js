@@ -95,7 +95,7 @@ export class SceneControlsBar extends FloatingBar {
     this.bar.replaceChildren();
 
     // En-tête commun (poignée · ↻ · pastille · titre · repli).
-    this.bar.appendChild(this.makeHeader("sc", { icon: "fa-sliders", title: t("ATS.controls.label") }));
+    this.bar.appendChild(this.makeHeader("sc", { icon: "fa-toolbox", title: t("ATS.controls.label") }));
 
     const controls = this.orderedVisible(ui.controls?.controls);
     const activeControl = ui.controls?.control;
@@ -171,7 +171,7 @@ export class SceneControlsBar extends FloatingBar {
   makeButton({ icon, tooltip, active, toggle = false, onClick }) {
     const btn = document.createElement("div");
     btn.className = "sc-btn sc-collapsible";
-    if (toggle) btn.classList.add("sc-toggle");
+    if (toggle) btn.classList.add("sc-tool-toggle");
     if (active) btn.classList.add("sc-active");
     if (tooltip) btn.dataset.tooltip = tooltip;
     const i = document.createElement("i");

@@ -222,6 +222,13 @@ export class FloatingBar {
   get defaultEdge() { return "free"; }
   get defaultOrientation() { return "h"; }
 
+  /**
+   * La barre utilise-t-elle la coque commune `.fb-bar` (une seule boîte : fond/bordure/ombre
+   * partagés) ? Vrai par défaut. Le suivi de combat la surcharge à false : sa coque est
+   * multi-panneaux et transparente (chaque panneau porte son propre fond).
+   */
+  get sharedShell() { return true; }
+
   /** Clé localStorage de l'état d'ancrage { align, order } (par utilisateur). */
   get dockStateKey() { return `${MODULE_ID}.${this.key}.dock.${game.user.id}`; }
 
@@ -653,14 +660,17 @@ export class FloatingBar {
   }
 
   /**
-   * Petite pastille d'identité (icône), visible UNIQUEMENT quand la barre est repliée
-   * (voir CSS `.fb-badge` / `.fb-collapsed`). Une fois minimisée, une barre n'affiche plus
-   * que : poignée · cette pastille · bouton d'ouverture. Elle permet de reconnaître la
-   * barre sans occuper d'espace en mode déplié. À insérer entre la poignée et le toggle.
+   * Pastille d'identité (icône carrée), TOUJOURS visible : elle tient lieu de titre de barre
+   * (plus de libellé texte, pour un rendu « barre d'outils » compact). Le titre de la barre est
+   * porté en tooltip (survol). À insérer entre la poignée et le contenu/toggle.
+   * @param {string} iconClass  Classe FontAwesome de l'icône.
+   * @param {string} [prefix]    Préfixe CSS de la barre (ajoute `${prefix}-badge`).
+   * @param {string} [title]     Titre affiché au survol (tooltip). Omis si vide.
    */
-  makeBadge(iconClass, className = "") {
+  makeBadge(iconClass, prefix = "", title = "") {
     const i = document.createElement("i");
-    i.className = `fas ${iconClass} fb-badge ${className}`.trim();
+    i.className = `fas ${iconClass} fb-badge${prefix ? ` ${prefix}-badge` : ""}`;
+    if (title) i.dataset.tooltip = title;
     return i;
   }
 
@@ -682,45 +692,31 @@ export class FloatingBar {
   /**
    * En-tête commun à toutes les barres : UNE ligne (`fb-header`) regroupant, dans un ordre
    * GARANTI par la classe de base, la poignée (⋮⋮) → le bouton ↻ (orientation) → la pastille
-   * d'identité (visible une fois repliée) → le titre repliable (option) → les éléments propres
-   * à la barre (`extra`) → le bouton de repli. Cette ligne se place EN TÊTE du conteneur, AVANT
-   * le contenu de la barre : le repli est donc toujours sur la même ligne que la poignée, avant
-   * le contenu. En orientation verticale, l'en-tête reste une ligne horizontale au-dessus du
-   * contenu (le conteneur, lui, passe en colonne). `prefix` ajoute les classes historiques par
-   * barre pour la compat CSS.
-   * @param {string} prefix        Préfixe CSS de la barre (« ab », « tb », « co », « rb »).
+   * d'identité (icône carrée, titre en tooltip) → les éléments propres à la barre (`extra`) →
+   * le bouton de repli. Cette ligne se place EN TÊTE du conteneur, AVANT le contenu de la barre :
+   * le repli est donc toujours sur la même ligne que la poignée, avant le contenu. En orientation
+   * verticale, l'en-tête reste une ligne horizontale au-dessus du contenu (le conteneur, lui, passe
+   * en colonne). `prefix` ajoute les classes historiques par barre pour la compat CSS.
+   * @param {string} prefix        Préfixe CSS de la barre (« ab », « tb », « co », « rb », « sc »).
    * @param {object} opts
    * @param {string} opts.icon     Classe FontAwesome de la pastille d'identité.
-   * @param {string} [opts.title]  Titre repliable (omis si vide, ex. barre des jets).
+   * @param {string} [opts.title]  Titre de la barre, affiché au survol de l'icône (tooltip).
    * @param {Node[]} [opts.extra]  Nœuds propres à la barre, insérés avant le bouton de repli.
    * @returns {HTMLElement}
    */
   makeHeader(prefix, { icon, title, extra = [] } = {}) {
+    // Coque commune (fond/bordure/ombre partagés) posée ici pour que TOUTE barre en hérite
+    // sans la redéclarer — sauf opt-out (`sharedShell` = false, ex. suivi de combat multi-panneaux).
+    if (this.el && this.sharedShell) this.el.classList.add("fb-bar");
+
     const header = document.createElement("div");
     header.className = `fb-header ${prefix}-header`;
     header.appendChild(this.makeHandle(`${prefix}-handle`));
     header.appendChild(this.makeRotateButton(`${prefix}-rotate`));
-    header.appendChild(this.makeBadge(icon));
-    const titleEl = this.makeTitle(prefix, title);
-    if (titleEl) header.appendChild(titleEl);
+    header.appendChild(this.makeBadge(icon, prefix, title));
     for (const node of extra) if (node) header.appendChild(node);
     header.appendChild(this.makeCollapseToggle(prefix));
     return header;
-  }
-
-  /**
-   * Titre repliable commun (nom de token, libellé de barre…), masqué en repli via la classe
-   * `${prefix}-collapsible`. Retourne null si le texte est vide (barres sans titre, ex. jets).
-   * @param {string} prefix  Préfixe CSS de la barre.
-   * @param {string} text    Texte du titre.
-   * @returns {(HTMLElement|null)}
-   */
-  makeTitle(prefix, text) {
-    if (!text) return null;
-    const el = document.createElement("div");
-    el.className = `fb-title ${prefix}-label ${prefix}-collapsible`;
-    el.textContent = text;
-    return el;
   }
 
   /**

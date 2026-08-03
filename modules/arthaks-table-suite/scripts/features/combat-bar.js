@@ -296,7 +296,7 @@ export class CombatOverlay extends FloatingBar {
    * propre au combat ici : le round et les options sont sur leur propre ligne (renderStatus).
    */
   renderHeader() {
-    return this.makeHeader("co", { icon: "fa-khanda" });
+    return this.makeHeader("co", { icon: "fa-swords", title: t("ATS.menu.combat.label") });
   }
 
   /**
@@ -1123,6 +1123,11 @@ export class CombatOverlay extends FloatingBar {
     this.root?.style.setProperty("--co-row", `${row}px`);
     this.root?.style.setProperty("--co-spot", `${spot}px`);
   }
+
+  // Coque : PAS la coque commune `.fb-bar` (une seule boîte). Le suivi de combat est
+  // multi-panneaux et transparent — chaque panneau (en-tête, rail, détail, liste) porte
+  // son propre fond ; le conteneur ne capte pas les clics. Voir CSS #combat-overlay.
+  get sharedShell() { return false; }
 
   // Minimiser (skeleton + icône dans FloatingBar) : chevron vertical (haut/bas).
   get collapsedClass() { return "co-collapsed"; }

@@ -43,22 +43,35 @@
 /* Repli : espacement resserré, aligné sur la silhouette compacte des barres réduites. */
 .fb-collapsed .fb-header { gap: 4px; }
 
-/* ── Repli commun à toutes les barres ─────────────────────────────────────────
-   Une barre minimisée ne montre que : poignée · pastille d'identité · bouton
-   d'ouverture. Tout le reste (contenu repliable, rotation, libellés…) est masqué,
-   pour que les barres repliées aient la même silhouette et s'alignent entre elles. */
+/* ── Pastille d'identité — tient lieu de titre (icône carrée, titre en tooltip) ─────
+   TOUJOURS visible : elle identifie la barre sans libellé texte (rendu « barre d'outils »
+   compact). Carrée (même largeur × hauteur) pour un alignement régulier d'une barre à l'autre.
+   pointer-events: all pour que le survol déclenche le tooltip du titre. */
 .fb-badge {
-  display: none; flex: 0 0 auto; align-items: center; justify-content: center;
-  color: #cdd2dd; font-size: 14px; line-height: 1; padding: 0 2px; pointer-events: none;
+  display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  color: #cdd2dd; font-size: 14px; line-height: 1; pointer-events: all;
 }
-.fb-collapsed .fb-badge { display: inline-flex; }
-/* La rotation n'a aucun sens sur une barre réduite : on la masque. */
+/* Repli commun : une barre minimisée ne montre que poignée · pastille · bouton d'ouverture.
+   La rotation n'a aucun sens sur une barre réduite : on la masque. */
 .fb-collapsed .fb-rotate { display: none !important; }
 
-/* ╔═══ BARRE DE GABARITS ══════════════════════════════════════════════════╗ */
-/* ── Barre de gabarits ──────────────────────────────────────────────────────── */
-#spell-template-bar {
-  --tb-btn: 40px;
+/* ── Bouton de repli commun (⟨/⟩) : apparence PARTAGÉE (toutes les barres en héritent) ─────
+   Les dimensions (22×22, rayon, taille de police) sont posées par le bloc id-scoped plus bas ;
+   ici la boîte (bordure) + le centrage + les couleurs, pour un rendu identique d'une barre à
+   l'autre. Une barre peut surcharger via `#barre .xx-toggle` (ex. combat, couleur ember). */
+.fb-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  color: #ccc; border: 1px solid #666; cursor: pointer;
+}
+.fb-toggle:hover { color: #fff; border-color: #ff6400; }
+
+/* ── Coque commune des barres « une boîte » ────────────────────────────────────
+   Shell PARTAGÉ (position, empilement, fond, bordure, ombre), posé par FloatingBar via la
+   classe `fb-bar` (cf. makeHeader). Chaque barre n'ajoute que ses spécificités (variables de
+   taille, max-width, débordement, couleur/police). Le suivi de combat en est EXCLU (`sharedShell`
+   = false) : sa coque est multi-panneaux et transparente, chaque panneau portant son propre fond. */
+.fb-bar {
   position: fixed; z-index: 70;
   display: flex; align-items: center; gap: 6px;
   padding: 4px 8px;
@@ -67,6 +80,11 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   pointer-events: all; user-select: none;
 }
+
+/* ╔═══ BARRE DE GABARITS ══════════════════════════════════════════════════╗ */
+/* ── Barre de gabarits ──────────────────────────────────────────────────────── */
+/* Coque commune : .fb-bar. Ici, seules les spécificités de la barre de gabarits. */
+#spell-template-bar { --tb-btn: 40px; }
 
 #spell-template-bar .tb-handle {
   flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
@@ -124,18 +142,9 @@
 
 /* ╔═══ BARRE DES CONTRÔLES DE SCÈNE ═══════════════════════════════════════╗ */
 /* ── Réplique flottante des contrôles natifs (sc-) — calquée sur la barre de gabarits ── */
-#scene-controls-bar {
-  --sc-btn: 40px;
-  position: fixed; z-index: 70;
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.65);
-  border: 1px solid #7a7a7a; border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  pointer-events: all; user-select: none;
-  /* Beaucoup d'outils possibles : la barre défile au lieu de sortir de l'écran (cf. constrainSize). */
-  overflow: auto;
-}
+/* Coque commune : .fb-bar. Spécificités : taille des boutons + débordement scrollable
+   (beaucoup d'outils possibles → la barre défile au lieu de sortir de l'écran, cf. constrainSize). */
+#scene-controls-bar { --sc-btn: 40px; overflow: auto; }
 
 #scene-controls-bar .sc-handle {
   flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
@@ -158,17 +167,18 @@
 #scene-controls-bar .sc-btn.sc-active {
   border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
 }
-/* Bascule (toggle) — bordure bleue PERMANENTE (marqueur « c'est un toggle », même OFF),
-   comme le natif (--toggle-border-color / --toggle-bg-color). Le fond ne vire au bleu qu'à l'état ON. */
-#scene-controls-bar .sc-btn.sc-toggle {
+/* Outil-bascule (toggle) — bordure bleue PERMANENTE (marqueur « c'est un toggle », même OFF),
+   comme le natif (--toggle-border-color / --toggle-bg-color). Le fond ne vire au bleu qu'à l'état ON.
+   Classe distincte de `sc-toggle` (bouton de repli) pour éviter toute collision. */
+#scene-controls-bar .sc-btn.sc-tool-toggle {
   border-color: #5252d7; background: rgba(34, 34, 72, 0.55);
 }
-#scene-controls-bar .sc-btn.sc-toggle:hover {
+#scene-controls-bar .sc-btn.sc-tool-toggle:hover {
   border-color: #8484ff; background: rgba(82, 82, 215, 0.35); color: #fff;
 }
 /* Toggle ENCLENCHÉ (aria-pressed=true) — fond bleu plein + bordure bleu clair, comme le natif
    (--toggle-active-bg-color / --toggle-active-border-color). Spécificité (3 classes) prioritaire. */
-#scene-controls-bar .sc-btn.sc-toggle.sc-active {
+#scene-controls-bar .sc-btn.sc-tool-toggle.sc-active {
   border-color: #8484ff; background: #5252d7; color: #fff;
 }
 /* Icône proportionnelle à la taille du bouton (16/40 = 0.4). */
@@ -215,8 +225,9 @@
 #combat-overlay .co-detail,
 #combat-overlay .co-editlist {
   pointer-events: auto;
-  background: rgba(14, 16, 22, 0.85);
-  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+  /* Même fond que les autres barres (rgba(0,0,0,0.65)), sans backdrop-filter, pour un rendu
+     homogène d'une barre à l'autre. */
+  background: rgba(0, 0, 0, 0.65);
 }
 /* Ligne d'actions du MJ : deux groupes (navigation · gestion) centrés, qui passent à
    la ligne ENSEMBLE si la largeur de la barre ne suffit pas. Chaque groupe reste
@@ -541,14 +552,8 @@
 
 /* ╔═══ BARRE D'ACTION DU TOKEN ════════════════════════════════════════════╗ */
 /* ── Barre d'action du token sélectionné ─────────────────────────────────────── */
-#selected-token-actions {
-  position: fixed; z-index: 70;
-  display: flex; align-items: center; gap: 6px;
-  max-width: 96vw; padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.65); border: 1px solid #7a7a7a; border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  pointer-events: all; user-select: none;
-}
+/* Coque commune : .fb-bar. Spécificité : plafond de largeur (déborde en scroll interne). */
+#selected-token-actions { max-width: 96vw; }
 
 #selected-token-actions .ab-handle {
   flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
@@ -680,15 +685,8 @@
 
 /* ╔═══ BARRE DES JETS ═════════════════════════════════════════════════════╗ */
 /* ── Barre de capture / affichage des jets (attaque + dégâts) ─────────────────── */
-#ats-rolls-bar {
-  position: fixed; z-index: 70;
-  display: flex; align-items: center; gap: 6px;
-  max-width: 96vw; padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.65); border: 1px solid #7a7a7a; border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  pointer-events: all; user-select: none;
-  color: #e9ebf2; font-size: 12px;
-}
+/* Coque commune : .fb-bar. Spécificités : plafond de largeur + couleur/police du contenu. */
+#ats-rolls-bar { max-width: 96vw; color: #e9ebf2; font-size: 12px; }
 
 #ats-rolls-bar .rb-handle {
   flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;

@@ -15,6 +15,7 @@
 import { registerSettings, registerKeybindings } from "./settings.js";
 import { HideHud } from "./features/hide-hud.js";
 import { RollsBar } from "./features/rolls-bar.js";
+import { TokenTeleport } from "./features/teleport.js";
 
 Hooks.once("init", () => {
   registerSettings();
@@ -25,6 +26,9 @@ Hooks.once("ready", () => {
   // Court-circuit de la fenêtre de configuration de jet dnd5e (fast-forward), indépendant de
   // l'affichage de la barre des jets, donc enregistré ici plutôt que dans son cycle de vie.
   RollsBar.installRollShortcuts();
+  // Téléport des tokens (MJ) : branche l'écoute des clics du plateau, indépendante de
+  // l'affichage des barres — d'où l'installation ici plutôt que dans une barre.
+  TokenTeleport.install();
   // Plus de réglage « Activer » : HideHud.apply() démarre les barres que l'audience de ce
   // client affiche (et masque le reste de l'interface selon la matrice).
   HideHud.apply();

@@ -597,7 +597,7 @@ export class RollsBar extends FloatingBar {
 
     // En-tête commun (poignée · ↻ · pastille · repli) sur une ligne, AVANT le contenu.
     // La barre des jets n'a pas de titre : la pile suit directement l'en-tête.
-    this.el.appendChild(this.makeHeader("rb", { icon: "fa-dice-d20" }));
+    this.el.appendChild(this.makeHeader("rb", { icon: "fa-dice-d20", title: t("ATS.menu.rolls.label") }));
 
     // Pile de lignes (repliable).
     const list = document.createElement("div");
