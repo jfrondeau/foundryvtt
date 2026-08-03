@@ -300,18 +300,18 @@
      homogène d'une barre à l'autre. */
   background: rgba(0, 0, 0, 0.65);
 }
-/* Ligne d'actions du MJ : deux groupes (navigation · gestion), intégrée à l'en-tête. Elle
-   reste sur la rangée du chrome tant que la largeur suffit (cas usuel en horizontal), puis
-   se replie en 2×2 (flex-wrap interne) quand la place manque, au lieu d'imposer sa propre
-   rangée systématique. `flex: 0 1 auto; min-width: 0` : largeur naturelle, mais peut rétrécir
-   pour laisser le round et le repli sur la ligne. Chaque groupe reste insécable. */
+/* Ligne d'actions du MJ : deux groupes (navigation · gestion), intégrée à l'en-tête. En
+   HORIZONTAL, elle reste sur la rangée du chrome tant que la largeur suffit (cas usuel : on a
+   la place), puis se replie en 2×2 (flex-wrap interne). En VERTICAL, la barre est une colonne
+   étroite → elle passe sur sa PROPRE rangée (voir `.fb-vertical .co-nav` plus bas).
+   `flex: 0 1 auto; min-width: 0` : largeur naturelle, mais peut rétrécir pour laisser le round
+   et le repli sur la ligne. Chaque groupe reste insécable. */
 #combat-overlay .co-nav {
   flex: 0 1 auto; min-width: 0;
-  display: flex; flex-wrap: wrap; justify-content: center;
-  gap: 4px 6px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 4px 0;
 }
-#combat-overlay .co-nav-group { display: flex; flex-wrap: nowrap; gap: 5px; }
-#combat-overlay .co-nav .co-btn { width: 28px; height: 28px; }
+#combat-overlay .co-nav-group { display: flex; flex-wrap: nowrap; align-items: center; gap: 0; }
 #combat-overlay .co-nav .co-btn i { font-size: 12px; }
 /* Coins arrondis seulement à l'extérieur ; jonctions internes franches. */
 #combat-overlay .co-header { border-radius: 8px 8px 0 0; }
@@ -419,6 +419,25 @@
 #combat-overlay .co-btn.co-btn-prep { color: #ffe08a; background: rgba(255, 207, 107, 0.16); border-color: rgba(255, 207, 107, 0.5); }
 #combat-overlay .co-btn.co-btn-prep:hover { background: rgba(255, 207, 107, 0.3); border-color: var(--co-gold); color: #1a0d00; }
 
+/* Boutons de la ligne d'actions du MJ (.co-nav) : PLATS — ni bordure ni fond, juste des
+   filets entre groupes (cf. .co-nav-group). Plus compact, surtout en vertical. Le sens reste
+   porté par la COULEUR de l'icône (bleu = navigation, rouge = fin, jaune = préparation),
+   héritée des règles .co-btn-end/.co-btn-prep ci-dessus (on n'en réinitialise pas `color`).
+   Placé APRÈS ces règles colorées pour l'emporter sur bordure/fond à spécificité égale. */
+#combat-overlay .co-nav .co-btn {
+  width: 24px; height: 24px;
+  border: none; background: none; border-radius: 0;
+}
+/* Filet fin AVANT chaque bouton sauf le tout premier → un séparateur entre CHAQUE bouton
+   (à l'intérieur d'un groupe via `.co-btn + .co-btn`, et à la jonction des deux groupes). */
+#combat-overlay .co-nav .co-btn + .co-btn,
+#combat-overlay .co-nav-group + .co-nav-group > .co-btn:first-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+#combat-overlay .co-nav .co-btn:hover {
+  background: rgba(255, 255, 255, 0.12); border-left-color: transparent; color: #fff; transform: none;
+}
+
 /* ═══ Vue « combat » : rail fin ═════════════════════════════════════════════ */
 #combat-overlay .co-rail {
   display: flex; flex-direction: column; align-items: stretch; gap: 3px;
@@ -445,6 +464,32 @@
 #combat-overlay.fb-horizontal .co-rail {
   flex-direction: row; align-items: stretch;
   max-height: none; max-width: 88vw; overflow-x: auto; overflow-y: visible;
+}
+
+/* ── Orientation verticale (ancrage gauche / droite) : colonne étroite ──────────── */
+/* Largeur de la barre : en horizontal la racine est `width: max-content` (l'en-tête, sur une
+   large rangée, la définit). En vertical il FAUT l'inverse — la largeur doit venir du CORPS
+   (rail / portrait), sinon l'en-tête, dont la max-content vaut « tout sur une ligne » (icônes +
+   round + actions), gonfle la racine et déborde très au-delà de la colonne. On passe donc la
+   racine en `width: min-content` (dictée par le contenu du rail) avec un plancher = la largeur
+   du portrait ; `align-items: stretch` étire alors l'en-tête à CETTE largeur, où il enveloppe
+   son contenu sur 3 lignes au lieu de l'imposer. */
+#combat-overlay.fb-vertical {
+  width: min-content;
+  min-width: var(--co-spot);
+}
+/* En-tête empilé sur 3 lignes : chaque bloc reçoit un `order` (les icônes du chrome restent à 0)
+   et `flex-basis:100%` pour forcer un retour à la ligne dans l'en-tête `flex-wrap` :
+     1) poignée · ↻ · pastille · options · repli   (rangée d'icônes)
+     2) « Manche X », centré
+     3) la ligne d'actions du MJ, boutons segmentés. */
+#combat-overlay.fb-vertical .co-header { gap: 3px 4px; padding: 3px 4px; }
+#combat-overlay.fb-vertical .co-round {
+  order: 5; flex-basis: 100%; text-align: center; flex-grow: 0;
+}
+#combat-overlay.fb-vertical .co-nav {
+  order: 9; flex-basis: 100%; flex-grow: 1;
+  margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--co-edge-soft);
 }
 
 /* Vignette (rail + liste setup) : anneau PV + image/initiales */
