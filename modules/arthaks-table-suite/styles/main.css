@@ -104,32 +104,32 @@
   font-size: 11px; color: #ddd; font-weight: bold; white-space: nowrap; margin-right: 2px;
 }
 
+/* Boutons PLATS (ni bordure ni fond), séparés par de fins filets — même langage que la barre
+   de combat. Repos = icône grise ; hover = léger fond. Les états portent la COULEUR (icône + fond
+   teinté) au lieu d'une bordure. */
 #spell-template-bar .tb-btn {
   display: flex; align-items: center; justify-content: center;
-  flex: 0 0 auto; width: var(--tb-btn); height: var(--tb-btn); color: #eee;
-  border: 2px solid #555; border-radius: 4px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.05); transition: all .1s ease;
+  flex: 0 0 auto; width: var(--tb-btn); height: var(--tb-btn); color: #cfd3dc;
+  border: none; border-radius: 4px; cursor: pointer;
+  background: none; transition: background .1s ease, color .1s ease;
 }
-#spell-template-bar .tb-btn:hover {
-  border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.12);
-  color: #fff; transform: translateY(-2px);
-}
-#spell-template-bar .tb-btn.tb-active {
-  border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
-}
-#spell-template-bar .tb-btn.tb-disabled {
-  opacity: .35; cursor: not-allowed; pointer-events: none;
-  border-color: #666; background: rgba(120, 120, 120, 0.15);
-}
+/* Filet fin entre chaque bouton (barre d'outils segmentée) : à gauche en flux horizontal,
+   en haut quand la barre passe en colonne (vertical). */
+#spell-template-bar .tb-btn + .tb-btn { border-left: 1px solid rgba(255, 255, 255, 0.18); }
+#spell-template-bar.fb-vertical .tb-btn + .tb-btn { border-left: none; border-top: 1px solid rgba(255, 255, 255, 0.18); }
+#spell-template-bar .tb-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+/* Forme active : icône + fond orange (plus de bordure). */
+#spell-template-bar .tb-btn.tb-active { background: rgba(255, 100, 0, 0.3); color: #ffb066; }
+#spell-template-bar .tb-btn.tb-disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
 /* Icône proportionnelle à la taille du bouton (16/40 = 0.4). */
 #spell-template-bar .tb-btn i { font-size: calc(var(--tb-btn) * 0.4); pointer-events: none; }
 
-#spell-template-bar .tb-trash {
-  border-color: #b5484a; background: rgba(181, 72, 74, 0.15);
-}
-#spell-template-bar .tb-trash:hover { border-color: #ff7e7e; background: rgba(255, 126, 126, 0.3); }
+/* Poubelle : icône rouge, fond rouge au survol. */
+#spell-template-bar .tb-trash { color: #f0a0a0; }
+#spell-template-bar .tb-trash:hover { background: rgba(201, 74, 76, 0.3); color: #fff; }
 
-#spell-template-bar .tb-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
+/* Séparateur de GROUPE (formes | poubelle) : un cran plus visible que les filets par bouton. */
+#spell-template-bar .tb-sep { width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.3); margin: 2px 2px; }
 
 #spell-template-bar .tb-toggle {
   flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
@@ -160,38 +160,32 @@
 #scene-controls-bar .sc-handle:hover { color: #fff; }
 #scene-controls-bar .sc-handle:active { cursor: grabbing; color: #ff6400; }
 
+/* Boutons PLATS (ni bordure ni fond), séparés par de fins filets — même langage que la barre
+   de combat. Les états portent la COULEUR (icône + fond teinté) au lieu d'une bordure. */
 #scene-controls-bar .sc-btn {
   display: flex; align-items: center; justify-content: center;
-  flex: 0 0 auto; width: var(--sc-btn); height: var(--sc-btn); color: #eee;
-  border: 2px solid #555; border-radius: 4px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.05); transition: all .1s ease;
+  flex: 0 0 auto; width: var(--sc-btn); height: var(--sc-btn); color: #cfd3dc;
+  border: none; border-radius: 4px; cursor: pointer;
+  background: none; transition: background .1s ease, color .1s ease;
 }
-#scene-controls-bar .sc-btn:hover {
-  border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.12);
-  color: #fff; transform: translateY(-2px);
-}
-/* Outil actif (sélectionné) — orange, comme le natif (--control-active-*). */
-#scene-controls-bar .sc-btn.sc-active {
-  border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
-}
-/* Outil-bascule (toggle) — bordure bleue PERMANENTE (marqueur « c'est un toggle », même OFF),
-   comme le natif (--toggle-border-color / --toggle-bg-color). Le fond ne vire au bleu qu'à l'état ON.
-   Classe distincte de `sc-toggle` (bouton de repli) pour éviter toute collision. */
-#scene-controls-bar .sc-btn.sc-tool-toggle {
-  border-color: #5252d7; background: rgba(34, 34, 72, 0.55);
-}
-#scene-controls-bar .sc-btn.sc-tool-toggle:hover {
-  border-color: #8484ff; background: rgba(82, 82, 215, 0.35); color: #fff;
-}
-/* Toggle ENCLENCHÉ (aria-pressed=true) — fond bleu plein + bordure bleu clair, comme le natif
-   (--toggle-active-bg-color / --toggle-active-border-color). Spécificité (3 classes) prioritaire. */
-#scene-controls-bar .sc-btn.sc-tool-toggle.sc-active {
-  border-color: #8484ff; background: #5252d7; color: #fff;
-}
+/* Filet fin entre chaque bouton : à gauche en flux horizontal (barre ou rangée d'outils),
+   en haut quand le flux est vertical (barre en colonne, ou rangées « 2 niveaux » verticales). */
+#scene-controls-bar .sc-btn + .sc-btn { border-left: 1px solid rgba(255, 255, 255, 0.18); }
+#scene-controls-bar.fb-vertical .sc-btn + .sc-btn { border-left: none; border-top: 1px solid rgba(255, 255, 255, 0.18); }
+#scene-controls-bar .sc-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+/* Outil actif (sélectionné) — icône + fond orange (comme le natif --control-active-*). */
+#scene-controls-bar .sc-btn.sc-active { background: rgba(255, 100, 0, 0.3); color: #ffb066; }
+/* Outil-bascule (toggle) — ICÔNE bleue permanente (marqueur « c'est un toggle », même OFF) ;
+   le fond ne vire au bleu qu'à l'état ON. Classe distincte de `sc-toggle` (bouton de repli). */
+#scene-controls-bar .sc-btn.sc-tool-toggle { color: #8a8aff; }
+#scene-controls-bar .sc-btn.sc-tool-toggle:hover { background: rgba(82, 82, 215, 0.3); color: #b6b6ff; }
+/* Toggle ENCLENCHÉ (aria-pressed=true) — icône + fond bleu plein. Spécificité (3 classes) prioritaire. */
+#scene-controls-bar .sc-btn.sc-tool-toggle.sc-active { background: rgba(82, 82, 215, 0.5); color: #fff; }
 /* Icône proportionnelle à la taille du bouton (16/40 = 0.4). */
 #scene-controls-bar .sc-btn i { font-size: calc(var(--sc-btn) * 0.4); pointer-events: none; }
 
-#scene-controls-bar .sc-sep { width: 1px; align-self: stretch; background: #666; margin: 2px 2px; }
+/* Séparateur de GROUPE (contrôles | outils) : un cran plus visible que les filets par bouton. */
+#scene-controls-bar .sc-sep { width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.3); margin: 2px 2px; }
 
 /* ── État minimisé : poignée + pastille d'identité + toggle ──────────────────── */
 #scene-controls-bar.sc-collapsed { gap: 4px; padding: 3px 5px; }
@@ -207,7 +201,15 @@
    rangée (`sc-level`) coule LE LONG de l'orientation. On reproduit la colonne native de
    Foundry (contrôles + outils côte à côte) sans allonger la barre sur un seul axe. */
 #scene-controls-bar.sc-two-level .sc-body { display: flex; gap: 6px; }
-#scene-controls-bar.sc-two-level .sc-level { display: flex; gap: 6px; }
+/* Padding identique sur LES DEUX rangées → les colonnes d'icônes restent alignées entre elles ;
+   seule la 2e (outils) porte le fond foncé. */
+#scene-controls-bar.sc-two-level .sc-level { display: flex; gap: 6px; padding: 2px 3px; }
+/* 2e rangée (outils du contrôle actif) : fond plus foncé pour la distinguer de la rangée
+   des contrôles (1re). Coins arrondis pour lire comme une bande à part. */
+#scene-controls-bar.sc-two-level .sc-level-tools {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 5px;
+}
 /* Horizontal : corps = colonne de 2 rangées ; chaque rangée = ligne de boutons. */
 #scene-controls-bar.sc-two-level.fb-horizontal .sc-body { flex-direction: column; align-items: flex-start; }
 #scene-controls-bar.sc-two-level.fb-horizontal .sc-level { flex-direction: row; align-items: center; }
