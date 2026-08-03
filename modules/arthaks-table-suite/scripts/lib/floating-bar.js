@@ -425,27 +425,51 @@ export class FloatingBar {
   /**
    * Positionne les placements ancrés. Les bords horizontaux (top/bottom) sont posés d'abord,
    * pleine largeur (ils possèdent les coins) ; les bords verticaux (left/right) cèdent au coin
-   * en rétrécissant leur étendue de la bande horizontale (épaisseur TOTALE des rangées empilées),
-   * pour ne jamais recouvrir une barre de coin.
+   * LOCALEMENT — seules les barres horizontales qui chevauchent réellement leur COLONNE les
+   * repoussent (une barre top-center n'occupe pas le coin gauche, donc ne décale pas le bord
+   * gauche). Ainsi on peut ancrer une barre en haut à gauche juste sous une barre top-start,
+   * sans être poussé sous une barre top-center même très haute.
    */
   static _positionEdges(placements) {
-    const H = window.innerHeight, m = FloatingBar.margin();
+    const W = FloatingBar.usableRight(), H = window.innerHeight, m = FloatingBar.margin();
     const byEdge = { top: [], bottom: [], left: [], right: [] };
     for (const p of placements) (byEdge[p.edge] ??= []).push(p);
 
-    let topBand = 0, botBand = 0;
     for (const edge of ["top", "bottom"]) {
-      const list = byEdge[edge];
-      if (!list.length) continue;
-      const band = FloatingBar._layoutEdge(list, edge, 0, FloatingBar.usableRight(), m);
-      if (edge === "top") topBand = band; else botBand = band;
+      if (byEdge[edge].length) FloatingBar._layoutEdge(byEdge[edge], edge, 0, W, m);
     }
 
+    // Les bords horizontaux sont maintenant posés : on lit leurs rectangles réels pour ne céder
+    // que le coin effectivement occupé par la colonne de chaque bord vertical.
     for (const edge of ["left", "right"]) {
       const list = byEdge[edge];
       if (!list.length) continue;
-      FloatingBar._layoutEdge(list, edge, topBand, H - botBand, m);
+      const colW = Math.max(0, ...list.map((p) => p.bar.el.offsetWidth)) + 2 * m;
+      const [p0, p1] = FloatingBar._cornerInsets(edge, colW);
+      FloatingBar._layoutEdge(list, edge, p0, p1, m);
     }
+  }
+
+  /**
+   * Étendue verticale [p0, p1] disponible pour un bord vertical (left|right), après cession du
+   * coin. Seules les barres top/bottom déjà ancrées dont le rectangle chevauche la COLONNE du
+   * bord (largeur `colW` depuis ce bord) réduisent l'étendue : une barre horizontale éloignée
+   * (ex. top-center) ne repousse pas ce bord. À appeler APRÈS le placement des bords horizontaux.
+   */
+  static _cornerInsets(edge, colW) {
+    const W = FloatingBar.usableRight(), H = window.innerHeight, m = FloatingBar.margin();
+    const [c0, c1] = edge === "left" ? [0, colW] : [W - colW, W];
+    let top = 0, bot = 0;
+    for (const b of FloatingBar.instances) {
+      if (!b.el || b.el.style.display === "none" || !b.isDocked()) continue;
+      const e = b.getEdge();
+      if (e !== "top" && e !== "bottom") continue;
+      const r = b.el.getBoundingClientRect();
+      if (r.right <= c0 || r.left >= c1) continue; // hors de la colonne du coin
+      if (e === "top") top = Math.max(top, r.bottom + m);
+      else bot = Math.max(bot, (H - r.top) + m);
+    }
+    return [top, H - bot];
   }
 
   /**
@@ -665,8 +689,14 @@ export class FloatingBar {
   /** Ancre discrète (start|center|end) selon la position du pointeur le long du bord. */
   _alignAt(edge, x, y) {
     const horiz = edge === "top" || edge === "bottom";
-    const span = horiz ? FloatingBar.usableRight() : window.innerHeight;
-    const frac = (horiz ? x : y) / span;
+    if (horiz) {
+      const frac = x / FloatingBar.usableRight();
+      return frac < 1 / 3 ? "start" : frac < 2 / 3 ? "center" : "end";
+    }
+    // Bord vertical : les tiers portent sur l'étendue RÉELLEMENT disponible (coin cédé), pour
+    // que l'ancre corresponde à ce que montre la dropzone.
+    const [s0, s1] = FloatingBar._cornerInsets(edge, (this.el.offsetWidth || 44) + 2 * FloatingBar.margin());
+    const frac = (y - s0) / Math.max(1, s1 - s0);
     return frac < 1 / 3 ? "start" : frac < 2 / 3 ? "center" : "end";
   }
 
@@ -732,8 +762,9 @@ export class FloatingBar {
 
   /**
    * Affiche la zone de dépôt = la CELLULE (ancre × rangée) visée : un tiers le long du bord, à la
-   * profondeur de la rangée cible, épaisse comme cette barre. La bande englobante (fine) rappelle
-   * le bord entier. C'est le « layout ondrag », qui reflète l'emplacement final.
+   * profondeur de la rangée cible, épaisse comme cette barre. La bande englobante rappelle
+   * l'étendue RÉELLEMENT disponible (coin cédé sur les bords verticaux) — elle reflète donc
+   * exactement l'emplacement final, y compris quand un coin est occupé par une autre barre.
    */
   showDropzone(edge, align = "center", row = 0) {
     if (!edge) return this.hideDropzone();
@@ -742,21 +773,27 @@ export class FloatingBar {
     const m = FloatingBar.margin();
     const near = this._rowDepthFor(edge, align, row);
     const thick = (horiz ? this.el.offsetHeight : this.el.offsetWidth) || 44;
-
-    // Bande-repère du bord entier, assez profonde pour contenir la rangée cible.
     const BAND = near + thick + 2 * m;
-    Object.assign(zone.style, { left: "", top: "", right: "", bottom: "", width: "", height: "", display: "block" });
-    if (horiz) { zone.style.left = "0"; zone.style.width = "100%"; zone.style.height = `${BAND}px`; zone.style[edge] = "0"; }
-    else { zone.style.top = "0"; zone.style.height = "100%"; zone.style.width = `${BAND}px`; zone.style[edge] = "0"; }
+    const atFrac = align === "start" ? 0 : align === "end" ? 2 / 3 : 1 / 3;
 
-    // Cellule visée : tiers le long du bord (ancre) × profondeur de la rangée.
+    Object.assign(zone.style, { left: "", top: "", right: "", bottom: "", width: "", height: "", display: "block" });
     const slot = (zone._slot ??= zone.appendChild(document.createElement("div")));
     slot.className = "fb-dropzone-slot";
-    const at = align === "start" ? "0%" : align === "end" ? "66.6667%" : "33.3333%";
     Object.assign(slot.style, { left: "", top: "", right: "", bottom: "", width: "", height: "" });
     slot.style[edge] = `${near}px`;
-    if (horiz) { slot.style.left = at; slot.style.width = "33.3333%"; slot.style.height = `${thick}px`; }
-    else { slot.style.top = at; slot.style.height = "33.3333%"; slot.style.width = `${thick}px`; }
+
+    if (horiz) {
+      const span = FloatingBar.usableRight();
+      zone.style.left = "0"; zone.style.width = `${span}px`; zone.style.height = `${BAND}px`; zone.style[edge] = "0";
+      slot.style.left = `${span * atFrac}px`; slot.style.width = `${span / 3}px`; slot.style.height = `${thick}px`;
+    } else {
+      // Étendue verticale réellement disponible (coin cédé) : la dropzone ne déborde pas sur une
+      // barre top/bottom qui occupe le coin.
+      const [s0, s1] = FloatingBar._cornerInsets(edge, thick + 2 * m);
+      const len = Math.max(0, s1 - s0);
+      zone.style.top = `${s0}px`; zone.style.height = `${len}px`; zone.style.width = `${BAND}px`; zone.style[edge] = "0";
+      slot.style.top = `${len * atFrac}px`; slot.style.height = `${len / 3}px`; slot.style.width = `${thick}px`;
+    }
   }
 
   hideDropzone() { if (this._dropzone) this._dropzone.style.display = "none"; }
