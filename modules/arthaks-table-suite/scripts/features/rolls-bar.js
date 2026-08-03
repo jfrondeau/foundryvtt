@@ -199,6 +199,7 @@ export class RollsBar extends FloatingBar {
         if (adj.mode) entry.attack.mode = adj.mode;
       }
       if (flags.damage) entry.damage = flags.damage;
+      if (flags.saves) entry.saves = this.savesToMap(flags.saves);
       this.render();
     } catch (err) {
       console.error("[Arthak's Table · Rolls Bar] updateChatMessage :", err);
@@ -255,15 +256,20 @@ export class RollsBar extends FloatingBar {
    */
   onChatMessage(msg) {
     try {
-      const rollType = this.rollTypeOf(msg);
-      if (!rollType) return;
-
       // Respect de la visibilité chat : si CE client n'a pas le droit de voir le message, on
       // n'affiche pas la ligne (whisper / blind / self). Le MJ voit tout.
       if (msg.visible === false) return;
 
+      const rollType = this.rollTypeOf(msg);
+      // Pas un message de JET : peut être une CARTE D'USAGE d'un sort à sauvegarde (Flamme sacrée…),
+      // captée pour afficher DD + cibles AVANT même les dégâts.
+      if (!rollType) { this.maybeCaptureSaveUsage(msg); return; }
+
       if (rollType === "attack") this.captureAttack(msg);
       else if (rollType === "damage" || rollType === "healing") this.captureDamage(msg, rollType === "healing");
+      // Jet de sauvegarde natif (bouton de la carte, feuille de perso…) : rattaché à la ligne du
+      // sort dont l'acteur est une cible, pour que les joueurs puissent lancer leur save au chat.
+      else if (rollType === "save") this.captureSaveRoll(msg);
     } catch (err) {
       console.error("[Arthak's Table · Rolls Bar] échec de capture :", err);
     }
@@ -320,17 +326,17 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Roule automatiquement les dégâts d'une attaque dès sa capture, pour épargner un clic à la
-   * table. Ne s'exécute que si le réglage `rollsAutoDamage` est actif, que la ligne a une activité
-   * et pas encore de dégâts, et que CE client est l'AUTEUR du jet — règle « un seul rouleur » : le
-   * flag de dégâts (voir `persistDamage`) réplique ensuite le résultat sur les autres écrans, ce
-   * qui évite un double lancer (le MJ possède aussi les jets des joueurs). Un 20 naturel sur le dé
-   * gardé déclenche le crit d'emblée (dés critiques ajoutés au jet de base).
+   * Roule automatiquement les dégâts d'une attaque OU d'un sort à sauvegarde dès sa capture, pour
+   * épargner un clic à la table. Ne s'exécute que si le réglage `rollsAutoDamage` est actif, que la
+   * ligne a une activité et pas encore de dégâts, et que CE client est l'AUTEUR du jet/de la carte —
+   * règle « un seul rouleur » : le flag de dégâts (voir `persistDamage`) réplique ensuite le résultat
+   * sur les autres écrans, ce qui évite un double lancer (le MJ possède aussi les jets des joueurs).
+   * Pour une attaque, un 20 naturel sur le dé gardé déclenche le crit d'emblée (voir `rollDamageFor`).
    * @param {object} entry  Ligne de la pile.
-   * @param {ChatMessage} msg  Message d'attaque source.
+   * @param {ChatMessage} msg  Message source (attaque, ou carte d'usage du sort à sauvegarde).
    */
   maybeAutoDamage(entry, msg) {
-    if (!entry?.attack || entry.damage || entry._autoRolling) return;
+    if ((!entry?.attack && !entry?.save) || entry.damage || entry._autoRolling) return;
     if (!entry.activityUuid || !entry.canControl) return;
     if (!game.settings.get(MODULE_ID, "rollsAutoDamage")) return;
     if (msg?.author?.id !== game.user.id) return;
@@ -348,12 +354,18 @@ export class RollsBar extends FloatingBar {
    */
   async rollDamageFor(entry) {
     const ok = await this.rollBaseDamage(entry, { heal: false });
-    if (ok && this.keptDie(entry.attack)?.value === 20) await this.setModifier(entry, "crit");
+    // Crit d'emblée sur un 20 naturel — attaques seulement (un sort à sauvegarde ne critique pas).
+    if (ok && entry.attack && this.keptDie(entry.attack)?.value === 20) await this.setModifier(entry, "crit");
   }
 
-  /** Cibles du jet (nom, image, CA) depuis les flags dnd5e du message. */
+  /**
+   * Cibles du jet (uuid d'acteur, nom, image, CA) depuis les flags dnd5e du message. L'`uuid`
+   * (issu de `getTargetDescriptors`) est conservé : il permet de lancer la sauvegarde de la cible
+   * et d'y appliquer les dégâts (sorts à sauvegarde), là où l'attaque n'a besoin que du nom/CA.
+   */
   parseTargets(msg) {
     return (msg.flags?.dnd5e?.targets ?? []).map((tg) => ({
+      uuid: tg.uuid ?? null,
       name: tg.name ?? "",
       img: tg.img ?? null,
       ac: Number(tg.ac),
@@ -384,10 +396,15 @@ export class RollsBar extends FloatingBar {
 
     const originId = msg.flags?.dnd5e?.originatingMessage ?? msg.id;
     const damage = this.parseDamage(msg, isHealing);
+    const activityUuid = msg.flags?.dnd5e?.activity?.uuid ?? null;
+    const save = this.parseSave(activityUuid ? fromUuidSync(activityUuid, { strict: false }) : null, msg);
 
     let entry = this._byOrigin.get(originId);
     if (entry) {
       entry.damage = damage;
+      // Un sort à sauvegarde dont les dégâts arrivent sans carte d'usage captée : complète la ligne.
+      if (save && !entry.save) entry.save = save;
+      entry.activityUuid ??= activityUuid;
     } else {
       const action = this.resolveAction(msg);
       entry = {
@@ -399,8 +416,12 @@ export class RollsBar extends FloatingBar {
         actionDesc: action.desc,
         actionUuid: action.uuid,
         canControl: this.canControl(msg),
+        activityUuid,
+        attackMode: msg.flags?.dnd5e?.roll?.attackMode ?? null,
         targets: this.parseTargets(msg),
         attack: null,
+        save,
+        saves: {},
         damage,
       };
       this._byOrigin.set(originId, entry);
@@ -408,6 +429,187 @@ export class RollsBar extends FloatingBar {
       this.trim();
     }
     this.render();
+  }
+
+  /**
+   * Décrit la sauvegarde d'une activité (DD, caractéristique, effet sur réussite) pour les sorts à
+   * jet de sauvegarde. Best-effort : lit d'abord l'activité résolue (`activity.save`), et retombe
+   * sur le flag `damageOnSave` du message de dégâts si l'activité n'est pas résoluble.
+   * @param {object|null} activity  Activité dnd5e résolue (SaveActivity), ou null.
+   * @param {ChatMessage} [msg]     Message de dégâts (repli pour `onSave`).
+   * @returns {({dc:number, ability:(string|null), onSave:string}|null)}
+   */
+  parseSave(activity, msg = null) {
+    if (!activity?.save) return null;
+    const dc = Number(activity.save.dc?.value);
+    if (!Number.isFinite(dc)) return null;
+    const ability = activity.save.ability?.first?.()
+      ?? [...(activity.save.ability ?? [])][0] ?? null;
+    const onSave = activity.damage?.onSave ?? msg?.flags?.dnd5e?.roll?.damageOnSave ?? "half";
+    return { dc, ability, onSave };
+  }
+
+  /**
+   * Capte la CARTE D'USAGE d'une activité à sauvegarde et crée/actualise sa ligne AVANT les dégâts :
+   * la ligne montre alors le sort, son DD et ses cibles, chacune munie d'un bouton pour lancer sa
+   * sauvegarde. Ignoré si le message n'est pas une carte d'activité à sauvegarde. La ligne est
+   * indexée par son id (= `originatingMessage` des dégâts à venir), donc les dégâts la complètent.
+   * @param {ChatMessage} msg
+   */
+  maybeCaptureSaveUsage(msg) {
+    const activityUuid = msg.flags?.dnd5e?.activity?.uuid;
+    if (!activityUuid) return;
+    const activity = fromUuidSync(activityUuid, { strict: false });
+    const save = this.parseSave(activity);
+    if (!save) return; // pas une activité à sauvegarde
+
+    const originId = msg.flags?.dnd5e?.originatingMessage ?? msg.id;
+    const targets = this.parseTargets(msg);
+
+    let entry = this._byOrigin.get(originId);
+    if (entry) {
+      entry.save = save;
+      entry.activityUuid ??= activityUuid;
+      if (targets.length) entry.targets = targets;
+    } else {
+      const action = this.resolveAction(msg);
+      entry = {
+        id: originId,
+        msgId: msg.id,
+        actorName: msg.alias ?? "",
+        actionName: action.name,
+        actionImg: action.img,
+        actionDesc: action.desc,
+        actionUuid: action.uuid,
+        canControl: this.canControl(msg),
+        activityUuid,
+        attackMode: null,
+        targets,
+        attack: null,
+        save,
+        saves: {},
+        damage: null,
+      };
+      this._byOrigin.set(originId, entry);
+      this.entries.unshift(entry);
+      this.trim();
+    }
+    entry.saves ??= {};
+    this.render();
+    // Auto-roll des dégâts du sort (comme les attaques) si le réglage est actif — côté lanceur.
+    this.maybeAutoDamage(entry, msg);
+  }
+
+  /**
+   * Rattache un jet de sauvegarde NATIF (bouton de la carte, feuille…) à la ligne du sort dont
+   * l'acteur est une cible — permet aux joueurs de lancer leur save au chat tout en alimentant la
+   * barre. La réussite est lue sur le D20Roll (`isSuccess`, sinon total ≥ DD). Pas de persistance :
+   * le message natif est diffusé à tous les clients, chacun capte le même jet.
+   * @param {ChatMessage} msg
+   */
+  captureSaveRoll(msg) {
+    const roll = msg.rolls?.[0];
+    if (!roll) return;
+    const actor = ChatMessage.getSpeakerActor?.(msg.speaker) ?? game.actors.get(msg.speaker?.actor);
+    const uuid = actor?.uuid;
+    if (!uuid) return;
+
+    // Ligne à sauvegarde la plus récente contenant cette cible.
+    const entry = this.entries.find((e) => e.save && (e.targets ?? []).some((tg) => tg.uuid === uuid));
+    if (!entry) return;
+
+    const total = Number(roll.total);
+    const dc = Number.isFinite(roll.options?.target) ? roll.options.target : entry.save.dc;
+    const success = roll.isSuccess ?? (Number.isFinite(dc) ? total >= dc : null);
+    entry.saves ??= {};
+    entry.saves[uuid] = { total, success, ability: msg.flags?.dnd5e?.roll?.ability ?? entry.save.ability };
+    this.render();
+  }
+
+  /**
+   * Lance la sauvegarde de TOUTES les cibles du sort en un clic (bouton « DD X CARAC »), puis rend et
+   * synchronise une seule fois. Les jets se suivent (animation 3D par cible). Cibles non contrôlées
+   * ignorées avec un avertissement (le MJ possède normalement les monstres ciblés).
+   * @param {object} entry  Ligne du sort.
+   */
+  async rollAllSaves(entry) {
+    if (!entry?.save) return;
+    const targets = (entry.targets ?? []).filter((tg) => tg.uuid);
+    if (!targets.length) { notify.warn(t("ATS.rolls.noTarget")); return; }
+
+    // Évalue d'abord TOUTES les sauvegardes (rapide, sans animation) puis anime les dés ENSEMBLE :
+    // tout tombe d'un coup au lieu de s'enchaîner cible après cible.
+    const rolls = [];
+    for (const tgt of targets) {
+      const roll = await this.evalSave(entry, tgt);
+      if (roll) rolls.push(roll);
+    }
+    if (!rolls.length) return;
+    await this.animateRolls(rolls);
+    this.render();
+    this.persistSaves(entry);
+  }
+
+  /**
+   * Cœur du jet de sauvegarde d'une cible : ÉVALUE (SANS carte de chat, create:false) et stocke le
+   * résultat dans `entry.saves[uuid]`, mais N'ANIME PAS et ne rend/synchronise pas — l'appelant
+   * groupe l'animation (tous les dés d'un coup) et le rendu. Retourne le `D20Roll`, ou null.
+   * @param {object} entry
+   * @param {object} tgt
+   * @returns {Promise<Roll|null>}
+   */
+  async evalSave(entry, tgt) {
+    if (!entry?.save || !tgt?.uuid) return null;
+    const actor = await fromUuid(tgt.uuid);
+    if (typeof actor?.rollSavingThrow !== "function") { notify.warn(t("ATS.rolls.saveMissing", { name: tgt.name })); return null; }
+    if (!actor.isOwner) { notify.warn(t("ATS.rolls.noPermission", { name: tgt.name })); return null; }
+
+    let rolls;
+    try {
+      rolls = await actor.rollSavingThrow(
+        { ability: entry.save.ability, target: entry.save.dc },
+        { configure: false },
+        { create: false },
+      );
+    } catch (err) {
+      console.error("[Arthak's Table · Rolls Bar] evalSave :", err);
+      notify.warn(t("ATS.rolls.saveFail", { name: tgt.name }));
+      return null;
+    }
+    const roll = rolls?.[0];
+    if (!roll) return null;
+
+    const total = Number(roll.total);
+    const dc = entry.save.dc;
+    const success = roll.isSuccess ?? (Number.isFinite(dc) ? total >= dc : null);
+    entry.saves ??= {};
+    entry.saves[tgt.uuid] = { total, success, ability: entry.save.ability };
+    return roll;
+  }
+
+  /**
+   * Persiste les jets de sauvegarde sur le message (flag invisible), propagés à tous les écrans.
+   * ⚠️ Sérialisé en TABLEAU et non en objet indexé par uuid : un uuid d'acteur contient des points
+   * (`Scene.x.Token.y.Actor.z`) et Foundry `expandObject` les prendrait pour des chemins imbriqués
+   * s'ils étaient des CLÉS d'objet — cassant la relecture (`entry.saves[uuid]` deviendrait undefined,
+   * puce grise). En tableau, l'uuid n'est qu'une VALEUR : aucun développement de chemin.
+   * @param {object} entry
+   */
+  async persistSaves(entry) {
+    const msg = game.messages.get(entry.msgId);
+    if (!msg) return;
+    try {
+      const arr = Object.entries(entry.saves ?? {}).map(([uuid, r]) => ({ uuid, ...r }));
+      await msg.setFlag(MODULE_ID, "saves", arr);
+    } catch (err) {
+      console.error("[Arthak's Table · Rolls Bar] persistSaves :", err);
+    }
+  }
+
+  /** Reconstruit la map { uuid → résultat } depuis le flag `saves` (tableau, cf. `persistSaves`). */
+  savesToMap(saves) {
+    if (Array.isArray(saves)) return Object.fromEntries(saves.filter((r) => r?.uuid).map((r) => [r.uuid, r]));
+    return saves ?? {};
   }
 
   /**
@@ -694,16 +896,24 @@ export class RollsBar extends FloatingBar {
       row.appendChild(this.renderAttack(entry));
       const targets = this.renderTargets(entry);
       if (targets) row.appendChild(targets);
+    } else if (entry.save) {
+      // Sort à sauvegarde : section Sauvegarde (DD) PUIS section Cibles, séparées comme Attaque|Cibles.
+      row.appendChild(this.renderSaveDC(entry));
+      const targets = this.renderTargets(entry);
+      if (targets) row.appendChild(targets);
     }
 
     if (entry.damage) {
       row.appendChild(this.renderDamage(entry));
-      // Applicateur : SECTION À PART (son propre div), à droite du résultat après un séparateur.
-      if (entry.canControl) row.appendChild(this.renderApplyControls(entry));
-    } else if (entry.attack && entry.canControl && entry.activityUuid
+      // Applicateur : SECTION À PART (son propre div), à droite du résultat après un séparateur. Pour
+      // un sort à sauvegarde, l'applicateur respecte le jet de chaque cible (plein / selon onSave).
+      if (entry.canControl) {
+        row.appendChild(entry.save ? this.renderSaveApply(entry) : this.renderApplyControls(entry));
+      }
+    } else if (entry.canControl && entry.activityUuid && (entry.attack || entry.save)
       && !game.settings.get(MODULE_ID, "rollsAutoDamage")) {
-      // Auto-roll désactivé : icône de lancer à la demande (l'auto-roll remplit sinon les dégâts
-      // tout seul — pas d'affichage transitoire de cette section).
+      // Icône de lancer à la demande (attaque ou sort à sauvegarde), seulement quand l'auto-roll est
+      // désactivé — sinon les dégâts se remplissent seuls à la capture (voir maybeAutoDamage).
       row.appendChild(this.renderRollDamage(entry));
     }
 
@@ -808,15 +1018,26 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Cibles du jet avec touche/échec calculé par la barre : 20 naturel = coup critique,
-   * 1 naturel = échec, sinon total (dé gardé courant + bonus) ≥ CA. Recalculé à chaque rendu,
-   * donc toujours cohérent avec l'ajustement d'état. Null s'il n'y a pas de cible.
+   * Section « Cibles », commune à l'attaque et au sort à sauvegarde : une puce par cible, colorée
+   * vert/rouge, JAMAIS cliquable (le lancer se fait ailleurs — dé au clic pour l'attaque, libellé DD
+   * pour le sort). Aiguille selon le type de ligne. Null s'il n'y a pas de cible.
    * @param {object} entry
    */
   renderTargets(entry) {
-    const targets = entry.targets ?? [];
-    if (!targets.length || !entry.attack) return null;
+    if (!(entry.targets ?? []).length) return null;
+    if (entry.attack) return this.renderAttackTargets(entry);
+    if (entry.save) return this.renderSaveTargets(entry);
+    return null;
+  }
 
+  /**
+   * Cibles d'une ATTAQUE avec touche/échec calculé par la barre : 20 naturel = coup critique,
+   * 1 naturel = échec, sinon total (dé gardé courant + bonus) ≥ CA. Recalculé à chaque rendu,
+   * donc toujours cohérent avec l'ajustement d'état.
+   * @param {object} entry
+   */
+  renderAttackTargets(entry) {
+    const targets = entry.targets ?? [];
     const kept = this.keptDie(entry.attack);
     const nat = kept.value;
     const total = nat != null ? nat + entry.attack.bonus : null;
@@ -853,6 +1074,135 @@ export class RollsBar extends FloatingBar {
     return box;
   }
 
+  /** Libellé court et localisé d'une caractéristique (via CONFIG.DND5E), en majuscules. */
+  abilityLabel(ability) {
+    if (!ability) return "";
+    const cfg = CONFIG?.DND5E?.abilities?.[ability];
+    const label = cfg?.abbreviation ?? cfg?.label ?? ability;
+    return t(label).toUpperCase();
+  }
+
+  /**
+   * Section « Sauvegarde » d'un sort (analogue de la section Attaque) : le seul libellé « DD X CARAC »,
+   * détaché par son propre filet séparateur. Cliquable si on contrôle la scène : lance la sauvegarde
+   * de TOUTES les cibles d'un coup (le résultat s'affiche ensuite dans la section Cibles voisine) ;
+   * sinon survol = rappel de l'effet sur réussite.
+   * @param {object} entry
+   */
+  renderSaveDC(entry) {
+    const save = entry.save;
+    const box = document.createElement("div");
+    box.className = "rb-saves";
+
+    const dc = document.createElement("span");
+    dc.className = "rb-save-dc";
+    dc.textContent = t("ATS.rolls.saveDC", { dc: save.dc, ability: this.abilityLabel(save.ability) });
+    if (entry.canControl && (entry.targets ?? []).some((tg) => tg.uuid)) {
+      dc.classList.add("rb-clickable");
+      dc.dataset.tooltip = t("ATS.rolls.rollAllSaves");
+      dc.addEventListener("click", () => this.rollAllSaves(entry));
+    } else {
+      dc.dataset.tooltip = t(`ATS.rolls.onSave.${save.onSave ?? "half"}`);
+    }
+    box.appendChild(dc);
+    return box;
+  }
+
+  /**
+   * Section « Cibles » d'un sort à sauvegarde, RÉUTILISANT le rendu des cibles d'attaque (puces
+   * `rb-target`, non cliquables) : réussite de la save = vert, échec = rouge (même polarité couleur
+   * que touché/manqué), le total du jet remplace la CA. Recalculée à chaque rendu depuis `entry.saves`.
+   * @param {object} entry
+   */
+  renderSaveTargets(entry) {
+    const box = document.createElement("div");
+    box.className = "rb-targets";
+    for (const tgt of entry.targets ?? []) {
+      const res = tgt.uuid ? entry.saves?.[tgt.uuid] ?? null : null;
+      const success = res?.success ?? null;
+
+      const chip = document.createElement("span");
+      chip.className = `rb-target ${success === true ? "rb-hit" : success === false ? "rb-miss" : "rb-unknown"}`;
+      if (res) chip.dataset.tooltip = success ? t("ATS.rolls.saved") : t("ATS.rolls.failed");
+
+      const icon = document.createElement("i");
+      icon.className = `fas ${success === true ? "fa-check" : success === false ? "fa-xmark" : "fa-question"}`;
+      chip.appendChild(icon);
+
+      const name = document.createElement("span");
+      name.className = "rb-target-name";
+      name.textContent = tgt.name;
+      chip.appendChild(name);
+
+      if (res) {
+        const total = document.createElement("span");
+        total.className = "rb-target-ac";
+        total.textContent = res.total;
+        chip.appendChild(total);
+      }
+      box.appendChild(chip);
+    }
+    return box;
+  }
+
+  /**
+   * Applicateur d'un sort à sauvegarde : un seul bouton qui applique les dégâts À CHAQUE cible selon
+   * son jet (échec = plein, réussite = selon `onSave`). Remplace les multiplicateurs manuels, sans
+   * objet du toggle ciblés/sélectionnés (les cibles sont celles du sort). Survol = rappel de l'effet.
+   * @param {object} entry
+   */
+  renderSaveApply(entry) {
+    const row = document.createElement("div");
+    row.className = "rb-apply rb-apply-save";
+
+    const b = document.createElement("span");
+    b.className = "rb-save-apply";
+    b.dataset.tooltip = t("ATS.rolls.applySaveHint", { onSave: t(`ATS.rolls.onSave.${entry.save?.onSave ?? "half"}`) });
+    const i = document.createElement("i");
+    i.className = "fas fa-shield-halved";
+    b.appendChild(i);
+    const lbl = document.createElement("span");
+    lbl.className = "rb-save-apply-lbl";
+    lbl.textContent = t("ATS.rolls.applySave");
+    b.appendChild(lbl);
+    b.addEventListener("click", () => this.applySaveDamage(entry));
+    row.appendChild(b);
+    return row;
+  }
+
+  /**
+   * Applique les dégâts d'un sort à sauvegarde à CHAQUE cible du sort selon son jet : échec (ou save
+   * non lancé) = plein ; réussite = selon `onSave` (aucun / moitié / plein). Résolution par acteur
+   * (via `actor.applyDamage`, qui gère résistances/immunités), une seule fois par cible.
+   * @param {object} entry
+   */
+  async applySaveDamage(entry) {
+    const dmg = entry.damage;
+    if (!dmg) { notify.warn(t("ATS.rolls.noDamageYet")); return; }
+    const targets = (entry.targets ?? []).filter((tg) => tg.uuid);
+    if (!targets.length) { notify.warn(t("ATS.rolls.noTarget")); return; }
+
+    const damages = this.buildApplyDamages(dmg);
+    const onSaveMult = { none: 0, half: 0.5, full: 1 }[entry.save?.onSave] ?? 0.5;
+
+    for (const tgt of targets) {
+      const actor = await fromUuid(tgt.uuid);
+      if (typeof actor?.applyDamage !== "function") { notify.warn(t("ATS.rolls.applyMissing", { name: tgt.name })); continue; }
+      if (!actor.isOwner) { notify.warn(t("ATS.rolls.noPermission", { name: tgt.name })); continue; }
+      // Un SOIN n'est pas réduit par une sauvegarde : plein pour tous. Un dégât applique la réduction
+      // selon le jet (échec/non-lancé = plein, réussite = onSave). Multiplicateur TOUJOURS positif :
+      // le sens (soin) vient du type « healing » dans `damages` (voir buildApplyDamages).
+      const multiplier = dmg.isHealing ? 1 : (entry.saves?.[tgt.uuid]?.success === true ? onSaveMult : 1);
+      if (multiplier === 0) continue; // sauvegarde réussie sans dégât résiduel
+      try {
+        await actor.applyDamage(damages, { multiplier });
+      } catch (err) {
+        console.error("[Arthak's Table · Rolls Bar] applySaveDamage :", err);
+        notify.warn(t("ATS.rolls.applyFail", { name: tgt.name }));
+      }
+    }
+  }
+
   /**
    * Bloc dégâts : résumé cliquable (sous-total par type + total entre parenthèses), dépliable
    * pour le détail des dés. Null s'il n'y a pas de dégâts.
@@ -870,7 +1220,7 @@ export class RollsBar extends FloatingBar {
     // n'existe que pour les dégâts roulés par la barre (présence de `baseParts`) ; pour des dégâts
     // captés d'un message natif, simple badge statique inline dans le résumé. L'applicateur est une
     // section à part (voir renderEntry).
-    const togglable = !!(entry.attack && entry.canControl && dmg.baseParts);
+    const togglable = !!((entry.attack || entry.save) && entry.canControl && dmg.baseParts);
 
     const summary = document.createElement("div");
     summary.className = "rb-dmg-summary";
@@ -935,7 +1285,9 @@ export class RollsBar extends FloatingBar {
     const current = dmg.isHealing ? "heal" : dmg.isCritical ? "crit" : "normal";
     const box = document.createElement("span");
     box.className = "rb-crit-ctl";
-    for (const key of ["normal", "crit", "heal"]) {
+    // Un sort à sauvegarde ne peut pas être critique : on n'offre que Norm / Soin.
+    const modes = entry.save ? ["normal", "heal"] : ["normal", "crit", "heal"];
+    for (const key of modes) {
       const seg = document.createElement("span");
       seg.className = `rb-crit-seg rb-mod-${key}${current === key ? " rb-crit-on" : ""}`;
       seg.textContent = t(`ATS.rolls.critToggle.${key}`);
@@ -1074,6 +1426,7 @@ export class RollsBar extends FloatingBar {
     const dmg = entry?.damage;
     if (!dmg?.baseParts || dmg.critParts) return;
     const critParts = [];
+    const rolls = [];
     for (const part of dmg.baseParts) {
       const formula = this.critFormulaFor(part);
       if (!formula) continue; // part sans dé (bonus plat seul) : pas de dé critique
@@ -1084,10 +1437,12 @@ export class RollsBar extends FloatingBar {
         console.error("[Arthak's Table · Rolls Bar] dés critiques :", err);
         continue;
       }
-      await this.animateRolls([roll]);
+      rolls.push(roll);
       const { dice, sum } = this.extractDice(roll);
       critParts.push({ type: part.type, subtotal: sum, formula, dice });
     }
+    // Tous les dés critiques (un par type) animés ENSEMBLE.
+    await this.animateRolls(rolls);
     dmg.critParts = critParts;
   }
 
@@ -1124,9 +1479,11 @@ export class RollsBar extends FloatingBar {
    */
   async animateRolls(rolls) {
     if (!game.dice3d) return;
-    for (const r of rolls) {
-      try { await game.dice3d.showForRoll(r, game.user, true); } catch { /* animation optionnelle */ }
-    }
+    // En PARALLÈLE : tous les dés d'un même lot (un 1d6 + 1d4, ou toutes les sauvegardes d'un
+    // sort) tombent ENSEMBLE plutôt qu'en file. `Promise.all` attend la fin de la dernière anim.
+    await Promise.all((rolls ?? []).map((r) =>
+      Promise.resolve(game.dice3d.showForRoll(r, game.user, true)).catch(() => { /* animation optionnelle */ }),
+    ));
   }
 
   /** Persiste les dégâts roulés sur le message (flag invisible), propagés à tous les écrans. */
@@ -1158,11 +1515,11 @@ export class RollsBar extends FloatingBar {
     const dmg = entry.damage;
     if (!dmg) return;
 
-    const groups = this.damageByType(dmg);
-    const damages = groups.map((g) => ({ value: g.subtotal, type: g.type || "" }));
-
-    const base = { x1: 1, half: 0.5, quarter: 0.25, x2: 2 }[kind] ?? 1;
-    const multiplier = dmg.isHealing ? -base : base; // multiplicateur négatif = soin
+    const damages = this.buildApplyDamages(dmg);
+    // Multiplicateur TOUJOURS positif : le soin passe par le TYPE « healing » (voir buildApplyDamages),
+    // que dnd5e négative de lui-même. Un multiplicateur négatif provoquerait une double négation sur
+    // un vrai soin (type déjà « healing ») → dégâts au lieu de soins.
+    const multiplier = { x1: 1, half: 0.5, quarter: 0.25, x2: 2 }[kind] ?? 1;
 
     const tokens = this.resolveApplyTargets();
     if (!tokens.length) { notify.warn(t("ATS.rolls.noTarget")); return; }
@@ -1178,6 +1535,25 @@ export class RollsBar extends FloatingBar {
         notify.warn(t("ATS.rolls.applyFail", { name: token.name }));
       }
     }
+  }
+
+  /**
+   * Construit le tableau `damages` passé à `actor.applyDamage`, en respectant le SENS (dégât/soin).
+   * ⚠️ dnd5e ne pilote PAS le soin par le signe du multiplicateur mais par le TYPE de dégât : une
+   * entrée de type « healing » est négativée par `calculateDamage` (donc soigne). On envoie donc, en
+   * mode soin, un unique lot `{ value: total, type: "healing" }` (multiplicateur positif) — fiable
+   * pour un dégât basculé en soin comme pour un vrai sort de soin (type déjà « healing », qui serait
+   * doublement négativé par un multiplicateur négatif → dégâts).
+   * @param {object} dmg  Objet dégâts de la ligne.
+   * @returns {{value:number, type:string}[]}
+   */
+  buildApplyDamages(dmg) {
+    const groups = this.damageByType(dmg);
+    if (dmg.isHealing) {
+      const total = groups.reduce((s, g) => s + (Number(g.subtotal) || 0), 0);
+      return [{ value: total, type: "healing" }];
+    }
+    return groups.map((g) => ({ value: g.subtotal, type: g.type || "" }));
   }
 
   // ── Minimiser (squelette + icône dans FloatingBar) ─────────────────────────

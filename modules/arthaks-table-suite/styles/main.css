@@ -883,6 +883,29 @@
 #ats-rolls-bar .rb-target-name { max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ats-rolls-bar .rb-target-ac { opacity: .8; }
 
+/* Sort à sauvegarde — section « Sauvegarde » : le seul libellé DD, détaché par son filet séparateur
+   (les cibles réutilisent .rb-targets, section voisine). */
+#ats-rolls-bar .rb-saves {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+#ats-rolls-bar .rb-save-dc {
+  font-weight: 800; color: #cdb8ff; font-variant-numeric: tabular-nums;
+  padding: 1px 6px; border-radius: 8px; border: 1px solid rgba(150, 120, 255, 0.5);
+  background: rgba(120, 90, 220, 0.15); cursor: help; white-space: nowrap;
+}
+#ats-rolls-bar .rb-save-dc.rb-clickable { cursor: pointer; }
+#ats-rolls-bar .rb-save-dc.rb-clickable:hover { color: #fff; border-color: #9a86ff; background: rgba(120, 90, 220, 0.35); }
+
+/* Applicateur « selon la sauvegarde » : bouton unique teinté violet (échec = plein, réussite = onSave). */
+#ats-rolls-bar .rb-save-apply {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 700;
+  color: #cdb8ff; border: 1px solid rgba(150, 120, 255, 0.5); background: rgba(120, 90, 220, 0.18);
+}
+#ats-rolls-bar .rb-save-apply:hover { color: #fff; border-color: #9a86ff; background: rgba(120, 90, 220, 0.35); }
+#ats-rolls-bar .rb-save-apply i { font-size: 10px; }
+
 /* Dégâts : résumé (sous-total par type + total entre parenthèses), détail des dés au survol. */
 #ats-rolls-bar .rb-damage {
   display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
@@ -922,6 +945,8 @@
 }
 /* En horizontal, largeur bornée pour répartir toggle + multiplicateurs sur 2 lignes. */
 #ats-rolls-bar:not(.fb-vertical) .rb-apply { max-width: 84px; }
+/* L'applicateur « selon la sauvegarde » est un bouton unique : pas de bornage. */
+#ats-rolls-bar:not(.fb-vertical) .rb-apply-save { max-width: none; }
 #ats-rolls-bar .rb-apply-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 4px; cursor: pointer;
@@ -996,6 +1021,7 @@
 /* Filets séparateurs : le bord GAUCHE (horizontal) devient un bord HAUT (vertical). */
 #ats-rolls-bar.fb-vertical .rb-attack,
 #ats-rolls-bar.fb-vertical .rb-targets,
+#ats-rolls-bar.fb-vertical .rb-saves,
 #ats-rolls-bar.fb-vertical .rb-damage,
 #ats-rolls-bar.fb-vertical .rb-apply,
 #ats-rolls-bar.fb-vertical .rb-rolldmg {
@@ -1003,7 +1029,7 @@
   padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* Cibles empilées, chacune sur toute la largeur de la carte. */
+/* Cibles empilées, chacune sur toute la largeur de la carte (attaque comme sort). */
 #ats-rolls-bar.fb-vertical .rb-targets { flex-direction: column; align-items: stretch; gap: 3px; }
 #ats-rolls-bar.fb-vertical .rb-target { justify-content: flex-start; }
 #ats-rolls-bar.fb-vertical .rb-target-name { max-width: none; flex: 1 1 auto; }
