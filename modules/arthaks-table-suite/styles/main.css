@@ -824,7 +824,7 @@
 /* Bloc d'attaque : total + dés + bonus sur la 1re ligne, sélecteur d'état (norm|adv|dis) REPLIÉ
    en dessous (flex-wrap + mode-ctl pleine largeur), pour compacter la barre. */
 #ats-rolls-bar .rb-attack {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
 /* Ligne interne « résultat » : total + dés + bonus sur une seule ligne. */
@@ -883,13 +883,14 @@
 #ats-rolls-bar .rb-target-name { max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ats-rolls-bar .rb-target-ac { opacity: .8; }
 
-/* Dégâts : résumé cliquable (sous-total par type + total entre parenthèses) et détail par dé. */
+/* Dégâts : résumé (sous-total par type + total entre parenthèses), détail des dés au survol. */
 #ats-rolls-bar .rb-damage {
-  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
   padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
 #ats-rolls-bar .rb-dmg-summary { display: inline-flex; align-items: center; gap: 6px; cursor: help; }
-#ats-rolls-bar .rb-dmg-type { font-weight: 700; color: #ffb38a; font-variant-numeric: tabular-nums; }
+/* Nombre-résultat harmonisé avec le total d'attaque (même taille/graisse tabulaire). */
+#ats-rolls-bar .rb-dmg-type { font-weight: 800; font-size: 16px; color: #ffb38a; font-variant-numeric: tabular-nums; }
 #ats-rolls-bar .rb-dmg-lbl {
   font-size: 9px; text-transform: uppercase; letter-spacing: .3px; color: #c9a58b; font-weight: 700;
 }

@@ -947,25 +947,13 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Barre d'application : toggle dégât/soin, toggle cible (ciblés/sélectionnés), puis les
-   * multiplicateurs (×1 · ½ · ¼ · ×2 · Crit) qui appliquent DIRECTEMENT au clic. Le crit ne
-   * double que les dés, pas le bonus.
+   * Barre d'application : multiplicateurs (×1 · ½ · ¼ · ×2) qui appliquent DIRECTEMENT au clic,
+   * puis EN DERNIER le toggle de cible (ciblés / sélectionnés). Le crit ne double que les dés.
    * @param {object} entry
    */
   renderApplyControls(entry) {
     const row = document.createElement("div");
     row.className = `rb-apply${entry.damage?.isHealing ? " rb-apply-heal" : ""}`;
-
-    // Toggle cible : ciblés (défaut) / sélectionnés.
-    const targeted = this._targetMode !== "selected";
-    const tgt = document.createElement("span");
-    tgt.className = "rb-apply-toggle";
-    tgt.dataset.tooltip = targeted ? t("ATS.rolls.targetTargeted") : t("ATS.rolls.targetSelected");
-    const tgtIcon = document.createElement("i");
-    tgtIcon.className = `fas ${targeted ? "fa-crosshairs" : "fa-expand"}`;
-    tgt.appendChild(tgtIcon);
-    tgt.addEventListener("click", () => { this._targetMode = targeted ? "selected" : "targeted"; this.render(); });
-    row.appendChild(tgt);
 
     // Multiplicateurs (application directe ; le crit est déjà géré au lancer).
     for (const [kind, label] of [["x1", "×1"], ["half", "½"], ["quarter", "¼"], ["x2", "×2"]]) {
@@ -976,6 +964,17 @@ export class RollsBar extends FloatingBar {
       b.addEventListener("click", () => this.applyDamage(entry, kind));
       row.appendChild(b);
     }
+
+    // Toggle cible EN DERNIER : ciblés (défaut) / sélectionnés.
+    const targeted = this._targetMode !== "selected";
+    const tgt = document.createElement("span");
+    tgt.className = "rb-apply-toggle";
+    tgt.dataset.tooltip = targeted ? t("ATS.rolls.targetTargeted") : t("ATS.rolls.targetSelected");
+    const tgtIcon = document.createElement("i");
+    tgtIcon.className = `fas ${targeted ? "fa-crosshairs" : "fa-expand"}`;
+    tgt.appendChild(tgtIcon);
+    tgt.addEventListener("click", () => { this._targetMode = targeted ? "selected" : "targeted"; this.render(); });
+    row.appendChild(tgt);
     return row;
   }
 
