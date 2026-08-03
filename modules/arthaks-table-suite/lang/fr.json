@@ -99,8 +99,7 @@
   "ATS.teleport.noToken": "Téléport : sélectionne d'abord un ou plusieurs tokens.",
   "ATS.teleport.fail": "Téléport impossible.",
 
-  "ATS.bar.handleTooltip": "Glisser pour déplacer · clic droit : réglages",
-  "ATS.bar.rotateTooltip": "Pivoter la barre (horizontale / verticale)",
+  "ATS.bar.handleTooltip": "Glisser : déplacer · clic droit : pivoter · maj+clic droit : réglages",
   "ATS.bar.collapse": "Minimiser la barre",
   "ATS.bar.expand": "Ré-étendre la barre",
   "ATS.bar.collapseShort": "Minimiser",

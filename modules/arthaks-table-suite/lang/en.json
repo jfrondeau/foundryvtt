@@ -99,8 +99,7 @@
   "ATS.teleport.noToken": "Teleport: select one or more tokens first.",
   "ATS.teleport.fail": "Teleport failed.",
 
-  "ATS.bar.handleTooltip": "Drag to move · right-click: settings",
-  "ATS.bar.rotateTooltip": "Rotate the bar (horizontal / vertical)",
+  "ATS.bar.handleTooltip": "Drag: move · right-click: rotate · shift+right-click: settings",
   "ATS.bar.collapse": "Minimize the bar",
   "ATS.bar.expand": "Expand the bar",
   "ATS.bar.collapseShort": "Minimize",

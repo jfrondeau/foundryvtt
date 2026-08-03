@@ -806,10 +806,15 @@ export class FloatingBar {
   }
 
   /**
-   * Crée la poignée de déplacement (icône grip) : glisser (bouton gauche) pour
-   * déplacer/ancrer, clic DROIT pour ouvrir les réglages de la barre. Ce clic droit
-   * est le seul accès aux réglages quand le HUD joueur est masqué (les panneaux par
-   * barre y sont ouverts programmatiquement, contournant le menu natif restreint).
+   * Crée la poignée de déplacement (icône grip). Elle concentre toutes les commandes de la
+   * barre (le bouton ↻ visible a été retiré) :
+   *   • GLISSER (bouton gauche)   → déplacer / ancrer ;
+   *   • CLIC DROIT                → bascule l'orientation (horizontale / verticale), pour les
+   *     barres orientables ; sinon (barre sans orientation) ouvre les réglages ;
+   *   • MAJ + CLIC DROIT          → ouvre les réglages de la barre.
+   * Le clic droit reste le seul accès aux réglages quand le HUD joueur est masqué (les panneaux
+   * par barre y sont ouverts programmatiquement, contournant le menu natif restreint) — d'où le
+   * repli sur les réglages quand la barre n'a pas d'orientation à basculer.
    */
   makeHandle(className, tooltip = t("ATS.bar.handleTooltip")) {
     const handle = document.createElement("i");
@@ -818,7 +823,9 @@ export class FloatingBar {
     this.initDrag(handle);
     handle.addEventListener("contextmenu", (ev) => {
       ev.preventDefault();
-      this.openSettings();
+      // Maj enfoncée → réglages ; sinon bascule l'orientation, ou réglages si la barre n'en a pas.
+      if (ev.shiftKey || !this.orientSettingKey) this.openSettings();
+      else this.toggleOrientation();
     });
     return handle;
   }
@@ -839,25 +846,11 @@ export class FloatingBar {
   }
 
   /**
-   * Bouton ↻ de rotation : bascule l'orientation horizontale / verticale de la barre.
-   * TOUJOURS visible (l'orientation est indépendante de l'ancrage), sauf barre repliée
-   * (cf. CSS). À n'ajouter que par les barres ayant une `orientSettingKey`.
-   */
-  makeRotateButton(className) {
-    const btn = document.createElement("i");
-    btn.className = `fas fa-rotate fb-rotate ${className}`;
-    btn.dataset.tooltip = t("ATS.bar.rotateTooltip");
-    // pointerdown stoppé pour ne pas amorcer un glisser depuis une poignée voisine.
-    btn.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-    btn.addEventListener("click", (ev) => { ev.preventDefault(); this.toggleOrientation(); });
-    return btn;
-  }
-
-  /**
    * En-tête commun à toutes les barres : UNE ligne (`fb-header`) regroupant, dans un ordre
-   * GARANTI par la classe de base, la poignée (⋮⋮) → le bouton ↻ (orientation) → la pastille
-   * d'identité (icône carrée, titre en tooltip) → les éléments propres à la barre (`extra`) →
-   * le bouton de repli. Cette ligne se place EN TÊTE du conteneur, AVANT le contenu de la barre :
+   * GARANTI par la classe de base, la poignée (⋮⋮) → la pastille d'identité (icône carrée,
+   * titre en tooltip) → les éléments propres à la barre (`extra`) → le bouton de repli.
+   * L'orientation se bascule désormais par clic droit sur la poignée (plus de bouton ↻ visible).
+   * Cette ligne se place EN TÊTE du conteneur, AVANT le contenu de la barre :
    * le repli est donc toujours sur la même ligne que la poignée, avant le contenu. En orientation
    * verticale, l'en-tête reste une ligne horizontale au-dessus du contenu (le conteneur, lui, passe
    * en colonne). `prefix` ajoute les classes historiques par barre pour la compat CSS.
@@ -876,7 +869,6 @@ export class FloatingBar {
     const header = document.createElement("div");
     header.className = `fb-header ${prefix}-header`;
     header.appendChild(this.makeHandle(`${prefix}-handle`));
-    header.appendChild(this.makeRotateButton(`${prefix}-rotate`));
     header.appendChild(this.makeBadge(icon, prefix, title));
     for (const node of extra) if (node) header.appendChild(node);
     header.appendChild(this.makeCollapseToggle(prefix));

@@ -26,25 +26,17 @@
    par _layoutMirror, seul le contenu est retourné. */
 .fb-mirror { transform: rotate(180deg); }
 
-/* ── Bouton ↻ de rotation d'orientation (commun aux barres orientables) ────────── */
-/* TOUJOURS visible : l'orientation horizontale / verticale est indépendante de
-   l'ancrage (barre libre ou ancrée). Seul le repli le masque (règle plus bas). */
-.fb-rotate {
-  flex: 0 0 auto; display: inline-flex; align-items: center; cursor: pointer; color: #aaa;
-  touch-action: none; padding: 0 4px; font-size: 13px; line-height: 1;
-}
-.fb-rotate:hover { color: #fff; }
-
-/* ── En-tête commun (une ligne) : poignée · ↻ · pastille · titre · repli ────────
+/* ── En-tête commun (une ligne) : poignée · pastille · titre · repli ────────
    Regroupe le chrome sur une SEULE ligne, placée AVANT le contenu de la barre. Le
    conteneur reste une ligne même quand la barre passe en colonne (orientation
-   verticale) : l'en-tête flotte alors au-dessus du contenu. */
+   verticale) : l'en-tête flotte alors au-dessus du contenu. L'orientation se bascule
+   par clic droit sur la poignée (plus de bouton ↻ visible). */
 .fb-header { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 /* Repli : espacement resserré, aligné sur la silhouette compacte des barres réduites. */
 .fb-collapsed .fb-header { gap: 4px; }
 /* Orientation verticale : le chrome s'empile en COLONNE au lieu de rester une rangée large.
-   Sans cette règle, l'en-tête horizontal (poignée · ↻ · pastille · repli ≈ 105px) imposerait
-   la largeur plancher de toute la barre, alors que le contenu n'est qu'une colonne d'icônes.
+   Sans cette règle, l'en-tête horizontal (poignée · pastille · repli) imposerait la largeur
+   plancher de toute la barre, alors que le contenu n'est qu'une colonne d'icônes.
    Ne vise que les barres à coque partagée (.fb-bar) ; le combat (sharedShell=false) est exclu. */
 .fb-bar.fb-vertical .fb-header { flex-direction: column; }
 
@@ -59,10 +51,6 @@
   color: #cdd2dd; font-size: 14px; line-height: 1; pointer-events: all;
 }
 .fb-collapsed .fb-badge { display: inline-flex; }
-/* Repli commun : une barre minimisée ne montre que poignée · pastille · bouton d'ouverture.
-   La rotation n'a aucun sens sur une barre réduite : on la masque. */
-.fb-collapsed .fb-rotate { display: none !important; }
-
 /* ── Bouton de repli commun (⟨/⟩) : apparence PARTAGÉE (toutes les barres en héritent) ─────
    Les dimensions (22×22, rayon, taille de police) sont posées par le bloc id-scoped plus bas ;
    ici la boîte (bordure) + le centrage + les couleurs, pour un rendu identique d'une barre à
