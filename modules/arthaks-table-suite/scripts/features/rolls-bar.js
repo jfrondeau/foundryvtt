@@ -689,6 +689,8 @@ export class RollsBar extends FloatingBar {
 
     if (entry.damage) {
       row.appendChild(this.renderDamage(entry));
+      // Applicateur : SECTION À PART (son propre div), à droite du résultat après un séparateur.
+      if (entry.canControl) row.appendChild(this.renderApplyControls(entry));
     } else if (entry.attack && entry.canControl && entry.activityUuid) {
       // Dégâts pas encore roulés : boutons de lancer (à la demande, une fois adv/dés figé).
       row.appendChild(this.renderRollDamage(entry));
@@ -732,10 +734,15 @@ export class RollsBar extends FloatingBar {
     // section action — voir applyActionTooltip).
     if (attack.formula) wrap.dataset.tooltip = attack.formula;
 
+    // Ligne interne « résultat » (total + dés + bonus) : garde total/dés/bonus sur UNE ligne, sous
+    // laquelle le sélecteur d'état se place — sans élargir le bloc (colonne ajustée au contenu).
+    const line = document.createElement("div");
+    line.className = "rb-atk-line";
+
     const totalEl = document.createElement("span");
     totalEl.className = "rb-atk-total";
     totalEl.textContent = total ?? "—";
-    wrap.appendChild(totalEl);
+    line.appendChild(totalEl);
 
     const dice = document.createElement("span");
     dice.className = "rb-atk-dice";
@@ -746,15 +753,16 @@ export class RollsBar extends FloatingBar {
       d.textContent = v;
       dice.appendChild(d);
     });
-    wrap.appendChild(dice);
+    line.appendChild(dice);
 
     if (attack.bonus) {
       const bonus = document.createElement("span");
       bonus.className = "rb-atk-bonus";
       bonus.textContent = attack.bonus > 0 ? `+${attack.bonus}` : `${attack.bonus}`;
-      wrap.appendChild(bonus);
+      line.appendChild(bonus);
     }
 
+    wrap.appendChild(line);
     wrap.appendChild(this.renderModeControl(entry));
     return wrap;
   }
@@ -847,6 +855,12 @@ export class RollsBar extends FloatingBar {
     const box = document.createElement("div");
     box.className = `rb-damage${dmg.isHealing ? " rb-heal" : ""}`;
 
+    // Comme l'attaque : RÉSULTAT en haut, MODIFICATEUR (bascule Norm / Crit) en dessous. Le toggle
+    // n'existe que pour les dégâts roulés par la barre (présence de `baseParts`) ; pour des dégâts
+    // captés d'un message natif, simple badge statique inline dans le résumé. L'applicateur est une
+    // section à part (voir renderEntry).
+    const togglable = !!(entry.attack && entry.canControl && dmg.baseParts);
+
     const summary = document.createElement("div");
     summary.className = "rb-dmg-summary";
     // Détail des dés au SURVOL (harmonisé avec la formule d'attaque), plutôt qu'un dépli au clic.
@@ -872,11 +886,7 @@ export class RollsBar extends FloatingBar {
     total.textContent = `(${dmg.total})`;
     summary.appendChild(total);
 
-    // Bascule Norm / Crit sur les dégâts roulés par la barre (présence de `baseParts`) : ajoute ou
-    // retire le delta de dés critiques. Sinon (dégâts captés d'un message natif), badge statique.
-    if (entry.attack && entry.canControl && dmg.baseParts) {
-      summary.appendChild(this.renderCritToggle(entry));
-    } else if (dmg.isCritical) {
+    if (!togglable && dmg.isCritical) {
       const crit = document.createElement("span");
       crit.className = "rb-dmg-crit";
       crit.textContent = t("ATS.rolls.critShort");
@@ -884,10 +894,8 @@ export class RollsBar extends FloatingBar {
     }
 
     box.appendChild(summary);
-
-    // Contrôles d'application (multiplicateurs qui appliquent directement) : MJ ou propriétaire.
-    if (entry.canControl) box.appendChild(this.renderApplyControls(entry));
-
+    // Modificateur SOUS le résultat (comme la ligne d'attaque).
+    if (togglable) box.appendChild(this.renderCritToggle(entry));
     return box;
   }
 

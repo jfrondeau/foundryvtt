@@ -804,7 +804,7 @@
 
 /* Une ligne = un jet : ✕ · action (icône + nom) · attaque (· dégâts · application à venir). */
 #ats-rolls-bar .rb-entry {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 6px;
   padding: 3px 6px; border-radius: 6px; white-space: nowrap;
   background: rgba(255, 255, 255, 0.05);
 }
@@ -821,11 +821,14 @@
   font-weight: 700; max-width: 150px; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Bloc d'attaque : total mis en avant, détail des d20, bonus plat, indicateur d'état. */
+/* Bloc d'attaque : total + dés + bonus sur la 1re ligne, sélecteur d'état (norm|adv|dis) REPLIÉ
+   en dessous (flex-wrap + mode-ctl pleine largeur), pour compacter la barre. */
 #ats-rolls-bar .rb-attack {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
+/* Ligne interne « résultat » : total + dés + bonus sur une seule ligne. */
+#ats-rolls-bar .rb-atk-line { display: flex; align-items: center; gap: 6px; }
 #ats-rolls-bar .rb-atk-total {
   font-weight: 800; font-size: 16px; color: #ffd479;
   font-variant-numeric: tabular-nums; min-width: 22px; text-align: center;
@@ -846,7 +849,8 @@
   color: #f0b3b3; border-color: rgba(201, 74, 76, 0.6); background: rgba(201, 74, 76, 0.15);
 }
 
-/* Sélecteur d'état cliquable (normal / avantage / désavantage) : segment actif surligné. */
+/* Sélecteur d'état cliquable (normal / avantage / désavantage), placé SOUS la ligne résultat
+   (rb-attack est une colonne) : segment actif surligné. */
 #ats-rolls-bar .rb-mode-ctl { display: inline-flex; align-items: center; gap: 2px; }
 #ats-rolls-bar .rb-mode-seg {
   font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
@@ -855,21 +859,28 @@
 #ats-rolls-bar .rb-mode-seg:hover { color: #fff; border-color: #ff6400; }
 #ats-rolls-bar .rb-mode-seg.rb-mode-on { color: #1a0d00; background: #ffd479; border-color: #ffd479; }
 
-/* Cibles : touche/échec vs CA, recalculé selon l'état courant. */
+/* Cibles : touche/échec vs CA, recalculé selon l'état courant. En horizontal, la section coule en
+   COLONNE plafonnée à ~2 cibles de haut (`flex-flow: column wrap` + `max-height`) : au-delà, la
+   cible suivante repart dans une nouvelle colonne à DROITE. La barre ne dépasse jamais 2 lignes, et
+   le conteneur se dimensionne à ses colonnes (shrink, pas d'espace vide en fin). */
 #ats-rolls-bar .rb-targets {
   display: inline-flex; align-items: center; gap: 4px;
   padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
+#ats-rolls-bar:not(.fb-vertical) .rb-targets {
+  flex-flow: column wrap; align-items: flex-start; align-content: flex-start;
+  max-height: 46px;
+}
 #ats-rolls-bar .rb-target {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 1px 6px; border-radius: 8px; font-size: 11px; border: 1px solid;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 5px; border-radius: 8px; font-size: 11px; border: 1px solid;
   font-variant-numeric: tabular-nums;
 }
 #ats-rolls-bar .rb-target i { font-size: 10px; }
 #ats-rolls-bar .rb-target.rb-hit { color: #b6f0c4; border-color: rgba(76, 201, 106, 0.6); background: rgba(76, 201, 106, 0.15); }
 #ats-rolls-bar .rb-target.rb-miss { color: #f0b3b3; border-color: rgba(201, 74, 76, 0.6); background: rgba(201, 74, 76, 0.15); }
 #ats-rolls-bar .rb-target.rb-unknown { color: #b6bccb; border-color: #4a5263; }
-#ats-rolls-bar .rb-target-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ats-rolls-bar .rb-target-name { max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ats-rolls-bar .rb-target-ac { opacity: .8; }
 
 /* Dégâts : résumé cliquable (sous-total par type + total entre parenthèses) et détail par dé. */
@@ -898,8 +909,15 @@
 #ats-rolls-bar .rb-crit-seg:hover { color: #fff; border-color: #ff7a1a; }
 #ats-rolls-bar .rb-crit-seg.rb-crit-on { color: #1a0d00; background: #ff7a1a; border-color: #ff7a1a; }
 
-/* Barre d'application : toggles (dégât/soin, cible) + multiplicateurs (appliquent au clic). */
-#ats-rolls-bar .rb-apply { display: inline-flex; align-items: center; gap: 3px; margin-top: 1px; }
+/* Applicateur : SECTION À PART dans la ligne (voir renderEntry), à droite du résultat dégâts.
+   Toggle cible + multiplicateurs (appliquent au clic). Filet séparateur à gauche, comme les
+   autres sections, pour la détacher du résultat. */
+#ats-rolls-bar .rb-apply {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
+  padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+/* En horizontal, largeur bornée pour répartir toggle + multiplicateurs sur 2 lignes. */
+#ats-rolls-bar:not(.fb-vertical) .rb-apply { max-width: 84px; }
 #ats-rolls-bar .rb-apply-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 4px; cursor: pointer;
@@ -979,14 +997,11 @@
 #ats-rolls-bar.fb-vertical .rb-attack,
 #ats-rolls-bar.fb-vertical .rb-targets,
 #ats-rolls-bar.fb-vertical .rb-damage,
+#ats-rolls-bar.fb-vertical .rb-apply,
 #ats-rolls-bar.fb-vertical .rb-rolldmg {
   padding-left: 0; border-left: none;
   padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
-
-/* Attaque : total + dés + bonus sur une ligne, sélecteur d'état replié en dessous. */
-#ats-rolls-bar.fb-vertical .rb-attack { flex-wrap: wrap; }
-#ats-rolls-bar.fb-vertical .rb-mode-ctl { flex-basis: 100%; }
 
 /* Cibles empilées, chacune sur toute la largeur de la carte. */
 #ats-rolls-bar.fb-vertical .rb-targets { flex-direction: column; align-items: stretch; gap: 3px; }
@@ -996,6 +1011,9 @@
 /* Boutons de lancer des dégâts : empilés sur toute la largeur. */
 #ats-rolls-bar.fb-vertical .rb-rolldmg { flex-direction: column; align-items: stretch; }
 #ats-rolls-bar.fb-vertical .rb-rd-btn { justify-content: center; }
+
+/* Applicateur en carte étroite : sur toute la largeur, multiplicateurs pouvant s'aligner. */
+#ats-rolls-bar.fb-vertical .rb-apply { flex-wrap: wrap; }
 
 /* ╔═══ MASQUAGE DE L'INTERFACE (matrice par audience) ═════════════════════╗ */
 /* Le masquage lui-même est injecté dynamiquement (#ahh-audience-hide) : pas de
