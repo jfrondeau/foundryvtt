@@ -42,16 +42,23 @@
 .fb-header { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 /* Repli : espacement resserré, aligné sur la silhouette compacte des barres réduites. */
 .fb-collapsed .fb-header { gap: 4px; }
+/* Orientation verticale : le chrome s'empile en COLONNE au lieu de rester une rangée large.
+   Sans cette règle, l'en-tête horizontal (poignée · ↻ · pastille · repli ≈ 105px) imposerait
+   la largeur plancher de toute la barre, alors que le contenu n'est qu'une colonne d'icônes.
+   Ne vise que les barres à coque partagée (.fb-bar) ; le combat (sharedShell=false) est exclu. */
+.fb-bar.fb-vertical .fb-header { flex-direction: column; }
 
 /* ── Pastille d'identité — tient lieu de titre (icône carrée, titre en tooltip) ─────
-   TOUJOURS visible : elle identifie la barre sans libellé texte (rendu « barre d'outils »
-   compact). Carrée (même largeur × hauteur) pour un alignement régulier d'une barre à l'autre.
+   Visible UNIQUEMENT quand la barre est repliée : elle sert alors de repère d'identité
+   (silhouette minimale poignée · pastille · toggle). Dépliée, le contenu identifie déjà la
+   barre → on masque l'icône pour gagner de la place. Carrée pour un alignement régulier ;
    pointer-events: all pour que le survol déclenche le tooltip du titre. */
 .fb-badge {
-  display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center;
+  display: none; flex: 0 0 auto; align-items: center; justify-content: center;
   width: 22px; height: 22px;
   color: #cdd2dd; font-size: 14px; line-height: 1; pointer-events: all;
 }
+.fb-collapsed .fb-badge { display: inline-flex; }
 /* Repli commun : une barre minimisée ne montre que poignée · pastille · bouton d'ouverture.
    La rotation n'a aucun sens sur une barre réduite : on la masque. */
 .fb-collapsed .fb-rotate { display: none !important; }
@@ -265,7 +272,6 @@
    haut, puis chaque COLONNE (rail, détail, liste). Même fond → jonctions
    invisibles ; le vide sous la colonne la plus courte laisse voir la carte. */
 #combat-overlay .co-header,
-#combat-overlay .co-status,
 #combat-overlay .co-nav,
 #combat-overlay .co-rail,
 #combat-overlay .co-detail,
@@ -275,17 +281,15 @@
      homogène d'une barre à l'autre. */
   background: rgba(0, 0, 0, 0.65);
 }
-/* Ligne d'actions du MJ : deux groupes (navigation · gestion) centrés, qui passent à
-   la ligne ENSEMBLE si la largeur de la barre ne suffit pas. Chaque groupe reste
-   insécable. CLEF : `width:0; min-width:100%` empêche la ligne d'ÉLARGIR la barre — elle
-   épouse la largeur fixée par les autres éléments (portrait, rail, en-tête) et se replie
-   en 2×2 dès qu'elle dépasserait, au lieu d'imposer sa propre largeur. Vaut pour les deux
-   orientations. `box-sizing: border-box` pour que le 100% inclue le padding. */
+/* Ligne d'actions du MJ : deux groupes (navigation · gestion), intégrée à l'en-tête. Elle
+   reste sur la rangée du chrome tant que la largeur suffit (cas usuel en horizontal), puis
+   se replie en 2×2 (flex-wrap interne) quand la place manque, au lieu d'imposer sa propre
+   rangée systématique. `flex: 0 1 auto; min-width: 0` : largeur naturelle, mais peut rétrécir
+   pour laisser le round et le repli sur la ligne. Chaque groupe reste insécable. */
 #combat-overlay .co-nav {
-  box-sizing: border-box; width: 0; min-width: 100%;
+  flex: 0 1 auto; min-width: 0;
   display: flex; flex-wrap: wrap; justify-content: center;
-  gap: 5px 8px;
-  padding: 5px 6px;
+  gap: 4px 6px;
 }
 #combat-overlay .co-nav-group { display: flex; flex-wrap: nowrap; gap: 5px; }
 #combat-overlay .co-nav .co-btn { width: 28px; height: 28px; }
@@ -304,12 +308,12 @@
      (qui portent un liseré 1px sur leur racine). */
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
-/* ── En-tête (chrome commun) + ligne de statut ────────────────────────────────
-   L'en-tête ne contient que le chrome partagé ; le round et les options sont sur la
-   ligne `co-status` juste en dessous (masquée en repli comme le reste du contenu). */
-#combat-overlay .co-header,
-#combat-overlay .co-status {
-  display: flex; align-items: center; gap: 6px;
+/* ── En-tête (chrome commun + round + options) ────────────────────────────────
+   Une SEULE rangée : chrome partagé (poignée · ↻ · pastille) + libellé de round (occupe
+   l'espace) + triangle d'options + repli. Le round et le triangle portent `co-collapsible`
+   (masqués au repli). Plus de ligne `co-status` séparée : rendu compact, surtout en horizontal. */
+#combat-overlay .co-header {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   padding: 4px 6px;
 }
 /* Panneau plus large que le chrome : le bouton de repli file au bord droit de l'en-tête. */

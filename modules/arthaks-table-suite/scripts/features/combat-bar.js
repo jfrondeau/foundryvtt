@@ -240,20 +240,20 @@ export class CombatOverlay extends FloatingBar {
     root.classList.toggle("co-setup", setupView);
     root.classList.toggle("co-combat", !setupView);
 
-    root.innerHTML = "";
-    // En-tête commun (identique aux autres barres) puis, sur sa propre ligne, le statut de
-    // combat (round + bouton d'options) — masqué en repli comme le reste du contenu.
-    root.appendChild(this.renderHeader());
-    root.appendChild(this.renderStatus(combat, started, editing));
-
     const visible = this.visibleCombatants(combat);
     const markerId = this.resolveMarkerId(combat, visible);
 
-    // Ligne d'actions du MJ (préc · suiv · fin · préparation) sous l'en-tête, en vue
-    // combat, quand le triangle l'a dépliée (this.showControls, défaut = réglage).
-    if (!setupView && game.user.isGM && this.showControls) {
-      root.appendChild(this.renderCombatControls(combat));
-    }
+    // Ligne d'actions du MJ (préc · suiv · fin · préparation), en vue combat, quand le triangle
+    // l'a dépliée (this.showControls, défaut = réglage). Intégrée à l'en-tête : elle se place sur
+    // la MÊME rangée que le chrome quand la largeur suffit (cas usuel en horizontal) et se replie
+    // en 2×2 sous le round quand elle manque de place — pas de rangée dédiée systématique.
+    const controls = (!setupView && game.user.isGM && this.showControls)
+      ? this.renderCombatControls(combat) : null;
+
+    root.innerHTML = "";
+    // En-tête commun (identique aux autres barres), enrichi sur la MÊME ligne du round de combat,
+    // du triangle d'options et — si présente — de la ligne d'actions du MJ, pour un rendu compact.
+    root.appendChild(this.renderHeader(combat, started, editing, controls));
 
     const body = document.createElement("div");
     body.className = "co-body co-collapsible";
@@ -299,30 +299,24 @@ export class CombatOverlay extends FloatingBar {
   }
 
   /**
-   * En-tête commun IDENTIQUE aux autres barres (poignée · ↻ · pastille · repli). Aucun élément
-   * propre au combat ici : le round et les options sont sur leur propre ligne (renderStatus).
-   */
-  renderHeader() {
-    return this.makeHeader("co", { icon: "fa-swords", title: t("ATS.menu.combat.label") });
-  }
-
-  /**
-   * Ligne de statut de combat, SOUS l'en-tête (repliable) : libellé de round (occupe l'espace)
-   * + triangle de dépliage de la ligne d'actions du MJ (vue combat uniquement ; en mode
-   * préparation, le retour au combat passe par le dé des contrôles de mise en place).
+   * En-tête commun (poignée · ↻ · pastille · repli), enrichi sur la MÊME ligne du libellé de
+   * round (occupe l'espace), du triangle de dépliage des actions du MJ, et — si fournie — de la
+   * ligne d'actions elle-même (`controls`) : tous insérés comme `extra` du chrome partagé, entre
+   * la pastille et le bouton de repli. Ces éléments portent `co-collapsible` (masqués au repli).
+   * L'en-tête autorise le retour à la ligne (CSS `flex-wrap`) : les actions restent sur la rangée
+   * du chrome tant que la largeur suffit, sinon se replient dessous.
    * @param {Combat} combat
    * @param {boolean} started
    * @param {boolean} editing
+   * @param {HTMLElement|null} [controls]  Ligne d'actions du MJ à intégrer (ou null).
    */
-  renderStatus(combat, started, editing) {
-    const status = document.createElement("div");
-    status.className = "co-status co-collapsible";
-
+  renderHeader(combat, started, editing, controls = null) {
     const round = document.createElement("div");
-    round.className = "co-round";
+    round.className = "co-round co-collapsible";
     round.textContent = !started ? t("ATS.combat.prep")
       : (editing ? t("ATS.combat.editRound", { round: combat.round }) : t("ATS.combat.round", { round: combat.round }));
-    status.appendChild(round);
+
+    const extra = [round];
 
     // Triangle : déplie/replie la ligne d'actions du MJ, hors mode préparation.
     if (game.user.isGM && started && !editing) {
@@ -331,11 +325,14 @@ export class CombatOverlay extends FloatingBar {
         t("ATS.combat.toggleControls"),
         () => { this.showControls = !this.showControls; this.render(combat); },
       );
-      caret.classList.add("co-caret");
-      status.appendChild(caret);
+      caret.classList.add("co-caret", "co-collapsible");
+      extra.push(caret);
     }
 
-    return status;
+    // Ligne d'actions du MJ (si dépliée) : sur la même rangée que le chrome quand la place suffit.
+    if (controls) extra.push(controls);
+
+    return this.makeHeader("co", { icon: "fa-swords", title: t("ATS.menu.combat.label"), extra });
   }
 
   // ── Vue « setup » : liste large, initiative éditable ──────────────────────
