@@ -75,7 +75,7 @@ const TokenBarConfig = makeSettingsPanel(
 
 const RollsBarConfig = makeSettingsPanel(
   "ats-rolls-config", "ATS.panel.rolls.title", "fa-solid fa-dice-d20",
-  ["rollsDock", "rollsOrientation", "dockMargin", "rollsSkipDialog", "rollsMaxEntries"],
+  ["rollsDock", "rollsOrientation", "dockMargin", "rollsSkipDialog", "rollsAutoDamage", "rollsMaxEntries"],
 );
 
 const ControlBarConfig = makeSettingsPanel(
@@ -380,6 +380,12 @@ export function registerSettings() {
   game.settings.register(MODULE_ID, "rollsSkipDialog", {
     name: "ATS.settings.rollsSkipDialog.name",
     hint: "ATS.settings.rollsSkipDialog.hint",
+    scope: "client", config: false, type: Boolean, default: true,
+  });
+
+  game.settings.register(MODULE_ID, "rollsAutoDamage", {
+    name: "ATS.settings.rollsAutoDamage.name",
+    hint: "ATS.settings.rollsAutoDamage.hint",
     scope: "client", config: false, type: Boolean, default: true,
   });
 

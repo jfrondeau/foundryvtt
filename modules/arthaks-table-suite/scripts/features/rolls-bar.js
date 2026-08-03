@@ -316,6 +316,30 @@ export class RollsBar extends FloatingBar {
       this.trim();
     }
     this.render();
+    this.maybeAutoDamage(entry, msg);
+  }
+
+  /**
+   * Roule automatiquement les dégâts d'une attaque dès sa capture, pour épargner un clic à la
+   * table. Ne s'exécute que si le réglage `rollsAutoDamage` est actif, que la ligne a une activité
+   * et pas encore de dégâts, et que CE client est l'AUTEUR du jet — règle « un seul rouleur » : le
+   * flag de dégâts (voir `persistDamage`) réplique ensuite le résultat sur les autres écrans, ce
+   * qui évite un double lancer (le MJ possède aussi les jets des joueurs). Un 20 naturel sur le dé
+   * gardé déclenche le crit d'emblée (dés critiques ajoutés au jet de base).
+   * @param {object} entry  Ligne de la pile.
+   * @param {ChatMessage} msg  Message d'attaque source.
+   */
+  maybeAutoDamage(entry, msg) {
+    if (!entry?.attack || entry.damage || entry._autoRolling) return;
+    if (!entry.activityUuid || !entry.canControl) return;
+    if (!game.settings.get(MODULE_ID, "rollsAutoDamage")) return;
+    if (msg?.author?.id !== game.user.id) return;
+
+    entry._autoRolling = true;
+    const crit = this.keptDie(entry.attack)?.value === 20;
+    this.rollBaseDamage(entry, { heal: false })
+      .then((ok) => { if (ok && crit) return this.setCrit(entry, true); })
+      .finally(() => { entry._autoRolling = false; });
   }
 
   /** Cibles du jet (nom, image, CA) depuis les flags dnd5e du message. */
@@ -404,19 +428,30 @@ export class RollsBar extends FloatingBar {
       const type = roll.options?.type ?? "";
       const subtotal = Number(roll.total) || 0;
       total += subtotal;
-      const dice = [];
-      for (const term of roll.terms ?? []) {
-        if (Array.isArray(term.results) && term.faces) {
-          dice.push({
-            faces: term.faces,
-            values: term.results.filter((r) => r.active !== false && !r.discarded && !r.rerolled).map((r) => r.result),
-          });
-        }
-      }
+      const { dice } = this.extractDice(roll);
       parts.push({ type, subtotal, formula: roll.formula, dice });
     }
     const isCritical = (rolls ?? []).some((r) => r.options?.isCritical || r.isCritical);
     return { parts, total, isCritical, isHealing: !!isHealing };
+  }
+
+  /**
+   * Extrait les dés gardés d'un `Roll` évalué (faces + valeurs actives, hors dés écartés/relancés)
+   * et leur somme. Mutualisé entre la capture d'un message et le lancer des dés critiques.
+   * @param {Roll} roll
+   * @returns {{ dice:{faces:number,values:number[]}[], sum:number }}
+   */
+  extractDice(roll) {
+    const dice = [];
+    let sum = 0;
+    for (const term of roll.terms ?? []) {
+      if (Array.isArray(term.results) && term.faces) {
+        const values = term.results.filter((r) => r.active !== false && !r.discarded && !r.rerolled).map((r) => r.result);
+        dice.push({ faces: term.faces, values });
+        sum += values.reduce((a, b) => a + b, 0);
+      }
+    }
+    return { dice, sum };
   }
 
   /**
@@ -814,11 +849,8 @@ export class RollsBar extends FloatingBar {
 
     const summary = document.createElement("div");
     summary.className = "rb-dmg-summary";
-    summary.dataset.tooltip = t("ATS.rolls.toggleDetail");
-
-    const caret = document.createElement("i");
-    caret.className = `fas fa-caret-${entry._dmgOpen ? "down" : "right"} rb-dmg-caret`;
-    summary.appendChild(caret);
+    // Détail des dés au SURVOL (harmonisé avec la formule d'attaque), plutôt qu'un dépli au clic.
+    summary.dataset.tooltip = this.damageDetailTooltip(groups);
 
     for (const g of groups) {
       const chip = document.createElement("span");
@@ -840,34 +872,56 @@ export class RollsBar extends FloatingBar {
     total.textContent = `(${dmg.total})`;
     summary.appendChild(total);
 
-    if (dmg.isCritical) {
+    // Bascule Norm / Crit sur les dégâts roulés par la barre (présence de `baseParts`) : ajoute ou
+    // retire le delta de dés critiques. Sinon (dégâts captés d'un message natif), badge statique.
+    if (entry.attack && entry.canControl && dmg.baseParts) {
+      summary.appendChild(this.renderCritToggle(entry));
+    } else if (dmg.isCritical) {
       const crit = document.createElement("span");
       crit.className = "rb-dmg-crit";
       crit.textContent = t("ATS.rolls.critShort");
       summary.appendChild(crit);
     }
 
-    summary.addEventListener("click", () => { entry._dmgOpen = !entry._dmgOpen; this.render(); });
     box.appendChild(summary);
 
     // Contrôles d'application (multiplicateurs qui appliquent directement) : MJ ou propriétaire.
     if (entry.canControl) box.appendChild(this.renderApplyControls(entry));
 
-    if (entry._dmgOpen) {
-      const detail = document.createElement("div");
-      detail.className = "rb-dmg-detail";
-      for (const g of groups) {
-        const line = document.createElement("div");
-        line.className = "rb-dmg-line";
-        const label = this.damageTypeLabel(g.type);
-        const bits = g.dice.map((d) => `${d.values.length}d${d.faces}: ${d.values.join(", ")}`);
-        if (g.flat) bits.push(g.flat > 0 ? `+${g.flat}` : `${g.flat}`);
-        line.textContent = `${label ? label + " — " : ""}${bits.join("  ")} = ${g.subtotal}`;
-        detail.appendChild(line);
-      }
-      box.appendChild(detail);
-    }
+    return box;
+  }
 
+  /**
+   * Construit le détail des dés d'un jet de dégâts pour le TOOLTIP de survol : une ligne par type
+   * (« Feu — 2d6: 3, 5  +2 = 10 »), lignes jointes par `<br>` (le tooltip Foundry rend le HTML).
+   * @param {{ type:string, subtotal:number, dice:{faces:number,values:number[]}[], flat:number }[]} groups
+   * @returns {string}
+   */
+  damageDetailTooltip(groups) {
+    return groups.map((g) => {
+      const label = this.damageTypeLabel(g.type);
+      const bits = g.dice.map((d) => `${d.values.length}d${d.faces}: ${d.values.join(", ")}`);
+      if (g.flat) bits.push(g.flat > 0 ? `+${g.flat}` : `${g.flat}`);
+      return `${label ? label + " — " : ""}${bits.join("  ")} = ${g.subtotal}`;
+    }).join("<br>");
+  }
+
+  /**
+   * Sélecteur Norm / Crit des dégâts : bascule l'ajout du delta de dés critiques via `setCrit`.
+   * `stopPropagation` pour ne pas déclencher le dépliage du détail (clic sur le résumé parent).
+   * @param {object} entry
+   */
+  renderCritToggle(entry) {
+    const box = document.createElement("span");
+    box.className = "rb-crit-ctl";
+    for (const [on, key] of [[false, "normal"], [true, "crit"]]) {
+      const seg = document.createElement("span");
+      seg.className = `rb-crit-seg${!!entry.damage.isCritical === on ? " rb-crit-on" : ""}`;
+      seg.textContent = t(`ATS.rolls.critToggle.${key}`);
+      seg.dataset.tooltip = t(`ATS.rolls.critSet.${key}`);
+      seg.addEventListener("click", (e) => { e.stopPropagation(); this.setCrit(entry, on); });
+      box.appendChild(seg);
+    }
     return box;
   }
 
@@ -925,7 +979,7 @@ export class RollsBar extends FloatingBar {
       s.textContent = t(labelKey);
       b.appendChild(s);
       b.dataset.tooltip = t(hintKey);
-      b.addEventListener("click", () => this.rollDamage(entry, opts));
+      b.addEventListener("click", () => this.rollDamageButton(entry, opts));
       return b;
     };
 
@@ -936,37 +990,130 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Roule les dégâts (ou soins) de l'activité à la demande, SANS carte de chat (create:false),
-   * animés en 3D (Dice So Nice) et synchronisés sur tous les écrans via un flag du message.
+   * Dispatcher des boutons de lancer manuels : roule les dégâts de BASE, puis applique le crit si
+   * demandé (bouton « Crit », ou 20 naturel pour le bouton « Dégât »). Passe par le même flux
+   * base + delta que l'auto-roll, si bien que le résultat reste basculable Norm/Crit ensuite.
    * @param {object} entry
    * @param {{crit:boolean, heal:boolean}} opts
    */
-  async rollDamage(entry, { crit, heal }) {
+  async rollDamageButton(entry, { crit, heal }) {
+    const ok = await this.rollBaseDamage(entry, { heal });
+    if (ok && crit) await this.setCrit(entry, true);
+  }
+
+  /**
+   * Roule les dégâts (ou soins) de BASE de l'activité — jamais critiques : le crit est un DELTA
+   * ajouté ensuite (voir `setCrit`), pour rester basculable sans relancer les dés de base. SANS
+   * carte de chat (create:false), animés en 3D (Dice So Nice), synchronisés via un flag du message.
+   * @param {object} entry
+   * @param {{heal:boolean}} opts
+   * @returns {Promise<boolean>}  Vrai si des dégâts ont été roulés.
+   */
+  async rollBaseDamage(entry, { heal }) {
     const activity = entry.activityUuid ? fromUuidSync(entry.activityUuid, { strict: false }) : null;
-    if (typeof activity?.rollDamage !== "function") { notify.warn(t("ATS.rolls.noActivity")); return; }
+    if (typeof activity?.rollDamage !== "function") { notify.warn(t("ATS.rolls.noActivity")); return false; }
 
     let rolls;
     try {
-      const config = { isCritical: !!crit };
+      const config = { isCritical: false };
       if (entry.attackMode) config.attackMode = entry.attackMode;
       rolls = await activity.rollDamage(config, { configure: false }, { create: false });
     } catch (err) {
-      console.error("[Arthak's Table · Rolls Bar] rollDamage :", err);
+      console.error("[Arthak's Table · Rolls Bar] rollBaseDamage :", err);
       notify.warn(t("ATS.rolls.rollDamageFail"));
-      return;
+      return false;
     }
-    if (!rolls?.length) return;
+    if (!rolls?.length) return false;
 
-    if (game.dice3d) {
-      for (const r of rolls) {
-        try { await game.dice3d.showForRoll(r, game.user, true); } catch { /* animation optionnelle */ }
-      }
-    }
+    await this.animateRolls(rolls);
 
-    entry.damage = this.parseDamageFromRolls(rolls, heal);
+    const dmg = this.parseDamageFromRolls(rolls, heal);
+    // Dés de base FIGÉS : le crit ajoutera un jeu de dés à part (critParts), sans les toucher.
+    dmg.baseParts = dmg.parts;
+    dmg.critParts = null;
+    dmg.isCritical = false;
+    this.recomputeDamage(dmg);
+    entry.damage = dmg;
     this.render();
     // Synchronise l'affichage des dégâts sur les autres écrans (même mécanisme que l'ajustement).
     this.persistDamage(entry);
+    return true;
+  }
+
+  /**
+   * Bascule l'état critique des dégâts déjà roulés APRÈS coup. Passer à crit roule UNE fois les dés
+   * critiques additionnels (un jeu de dés supplémentaire de même composition que les dés de base =
+   * doublement des dés, le bonus plat jamais doublé) et les met en cache ; les révoquer/rétablir ne
+   * fait ensuite qu'ajouter ou retirer ce delta, sans relancer. Ne s'applique qu'aux dégâts roulés
+   * par la barre (présence de `baseParts`).
+   * @param {object} entry  Ligne de la pile.
+   * @param {boolean} on     Vrai = critique, faux = normal.
+   */
+  async setCrit(entry, on) {
+    const dmg = entry?.damage;
+    if (!dmg?.baseParts || !!dmg.isCritical === !!on) return;
+
+    if (on && !dmg.critParts) {
+      const critParts = [];
+      for (const part of dmg.baseParts) {
+        const formula = this.critFormulaFor(part);
+        if (!formula) continue; // part sans dé (bonus plat seul) : pas de dé critique
+        let roll;
+        try {
+          roll = await new Roll(formula).evaluate();
+        } catch (err) {
+          console.error("[Arthak's Table · Rolls Bar] dés critiques :", err);
+          continue;
+        }
+        await this.animateRolls([roll]);
+        const { dice, sum } = this.extractDice(roll);
+        critParts.push({ type: part.type, subtotal: sum, formula, dice });
+      }
+      dmg.critParts = critParts;
+    }
+
+    dmg.isCritical = !!on;
+    this.recomputeDamage(dmg);
+    this.render();
+    this.persistDamage(entry);
+  }
+
+  /**
+   * Formule des dés critiques d'une part = un jeu de dés identique à ses dés de base (regroupés par
+   * face), p.ex. « 2d6 + 1d4 ». Chaîne vide si la part n'a aucun dé (bonus plat seul).
+   * @param {{dice:{faces:number,values:number[]}[]}} part
+   * @returns {string}
+   */
+  critFormulaFor(part) {
+    const byFaces = new Map();
+    for (const d of part.dice ?? []) {
+      if (d.faces && d.values?.length) byFaces.set(d.faces, (byFaces.get(d.faces) ?? 0) + d.values.length);
+    }
+    return [...byFaces.entries()].map(([faces, count]) => `${count}d${faces}`).join(" + ");
+  }
+
+  /**
+   * Recompose les parts et le total EFFECTIFS d'un objet dégâts depuis ses dés de base et — si le
+   * crit est actif — ses dés critiques. Appelé après chaque roll ou bascule d'état.
+   * @param {object} dmg
+   */
+  recomputeDamage(dmg) {
+    const parts = [...(dmg.baseParts ?? [])];
+    if (dmg.isCritical && dmg.critParts) parts.push(...dmg.critParts);
+    dmg.parts = parts;
+    dmg.total = parts.reduce((s, p) => s + (Number(p.subtotal) || 0), 0);
+  }
+
+  /**
+   * Anime une série de jets en 3D (Dice So Nice), synchronisés sur tous les écrans (dont la TV).
+   * Repli silencieux si DSN n'est pas installé.
+   * @param {Roll[]} rolls
+   */
+  async animateRolls(rolls) {
+    if (!game.dice3d) return;
+    for (const r of rolls) {
+      try { await game.dice3d.showForRoll(r, game.user, true); } catch { /* animation optionnelle */ }
+    }
   }
 
   /** Persiste les dégâts roulés sur le message (flag invisible), propagés à tous les écrans. */

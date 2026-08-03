@@ -877,9 +877,7 @@
   display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
   padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
-#ats-rolls-bar .rb-dmg-summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-#ats-rolls-bar .rb-dmg-caret { color: #8b93a5; font-size: 11px; width: 8px; text-align: center; }
-#ats-rolls-bar .rb-dmg-summary:hover .rb-dmg-caret { color: #fff; }
+#ats-rolls-bar .rb-dmg-summary { display: inline-flex; align-items: center; gap: 6px; cursor: help; }
 #ats-rolls-bar .rb-dmg-type { font-weight: 700; color: #ffb38a; font-variant-numeric: tabular-nums; }
 #ats-rolls-bar .rb-dmg-lbl {
   font-size: 9px; text-transform: uppercase; letter-spacing: .3px; color: #c9a58b; font-weight: 700;
@@ -891,8 +889,14 @@
   font-size: 9px; font-weight: 800; text-transform: uppercase;
   color: #1a0d00; background: #ff7a1a; border-radius: 6px; padding: 0 4px;
 }
-#ats-rolls-bar .rb-dmg-detail { display: flex; flex-direction: column; gap: 1px; padding-left: 14px; }
-#ats-rolls-bar .rb-dmg-line { font-size: 10px; color: #cdd2dd; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Bascule Norm / Crit des dégâts roulés par la barre (ajoute/retire le delta de dés critiques). */
+#ats-rolls-bar .rb-crit-ctl { display: inline-flex; align-items: center; gap: 2px; }
+#ats-rolls-bar .rb-crit-seg {
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
+  padding: 1px 5px; border-radius: 8px; border: 1px solid #4a5263; color: #8b93a5; cursor: pointer;
+}
+#ats-rolls-bar .rb-crit-seg:hover { color: #fff; border-color: #ff7a1a; }
+#ats-rolls-bar .rb-crit-seg.rb-crit-on { color: #1a0d00; background: #ff7a1a; border-color: #ff7a1a; }
 
 /* Barre d'application : toggles (dégât/soin, cible) + multiplicateurs (appliquent au clic). */
 #ats-rolls-bar .rb-apply { display: inline-flex; align-items: center; gap: 3px; margin-top: 1px; }
