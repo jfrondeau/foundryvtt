@@ -198,6 +198,7 @@ export class RollsBar extends FloatingBar {
         if (Array.isArray(adj.rawDice)) entry.attack.rawDice = adj.rawDice;
         if (adj.mode) entry.attack.mode = adj.mode;
       }
+      if (flags.targets) entry.targets = flags.targets;
       if (flags.damage) entry.damage = flags.damage;
       if (flags.saves) entry.saves = this.savesToMap(flags.saves);
       this.render();
@@ -244,6 +245,8 @@ export class RollsBar extends FloatingBar {
     this.hookIds.createChatMessage = Hooks.on("createChatMessage", (msg) => this.onChatMessage(msg));
     // Ajustements d'état (avantage/désavantage) synchronisés entre écrans via un flag du message.
     this.hookIds.updateChatMessage = Hooks.on("updateChatMessage", (msg) => this.onUpdateMessage(msg));
+    // Re-ciblage à chaud : cibler un token sur le canvas APRÈS le jet met à jour la dernière ligne.
+    this.hookIds.targetToken = Hooks.on("targetToken", (user) => this.onTargetChange(user));
   }
 
   // destroy() : hérité de FloatingBar (retire le hook, l'élément, l'instance).
@@ -370,6 +373,53 @@ export class RollsBar extends FloatingBar {
       img: tg.img ?? null,
       ac: Number(tg.ac),
     }));
+  }
+
+  /**
+   * Instantané des cibles ACTUELLEMENT ciblées sur le canvas (`game.user.targets`), dans la MÊME
+   * forme que `parseTargets` — l'`uuid` est celui de l'ACTEUR (comme les descripteurs dnd5e), requis
+   * pour lancer la sauvegarde / appliquer les dégâts par cible. Tokens sans acteur ignorés.
+   * @returns {{uuid:string,name:string,img:string,ac:number}[]}
+   */
+  snapshotCurrentTargets() {
+    return [...(game.user.targets ?? [])]
+      .filter((token) => token?.actor?.uuid)
+      .map((token) => ({
+        uuid: token.actor.uuid,
+        name: token.actor.name ?? token.name ?? "",
+        img: token.document?.texture?.src ?? token.actor.img ?? null,
+        ac: Number(token.actor.system?.attributes?.ac?.value),
+      }));
+  }
+
+  /**
+   * Re-ciblage à chaud de la DERNIÈRE ligne : quand ce client (re)cible un token sur le canvas après
+   * le jet, on remplace `entry.targets` de la ligne la plus récente par les cibles courantes, puis on
+   * rend et synchronise (flag `targets`, débouncé car le ciblage émet un event par token). Les jets de
+   * sauvegarde des cibles retirées sont élagués (les nouvelles restent « en attente », relançables via
+   * le bouton DD). Réservé à la dernière ligne contrôlable : on ne remonte jamais aux lignes anciennes.
+   * @param {User} user  Auteur du changement de ciblage (le hook est diffusé à tous les clients).
+   */
+  onTargetChange(user) {
+    if (user !== game.user) return; // `game.user.targets` est local : seul le cibleur peut snapshotter
+    const entry = this.entries[0];
+    if (!entry?.canControl || !(entry.attack || entry.save)) return;
+
+    entry.targets = this.snapshotCurrentTargets();
+    if (entry.saves) {
+      entry.saves = Object.fromEntries(
+        Object.entries(entry.saves).filter(([uuid]) => entry.targets.some((tg) => tg.uuid === uuid)),
+      );
+    }
+    this.render();
+
+    // Persistance groupée : un seul flag écrit après la rafale d'events de ciblage.
+    clearTimeout(this._persistTargetsTimer);
+    this._persistTargetsTimer = setTimeout(() => {
+      if (this._destroyed) return;
+      this.persistTargets(entry);
+      if (entry.save) this.persistSaves(entry);
+    }, 200);
   }
 
   /** Ce client peut-il piloter cette ligne (MJ, ou propriétaire de l'acteur du jet) ? */
@@ -1494,6 +1544,22 @@ export class RollsBar extends FloatingBar {
       await msg.setFlag(MODULE_ID, "damage", entry.damage);
     } catch (err) {
       console.error("[Arthak's Table · Rolls Bar] persistDamage :", err);
+    }
+  }
+
+  /**
+   * Persiste les cibles re-ciblées à chaud sur le message (flag invisible), propagées à tous les
+   * écrans via `onUpdateMessage`. Sûr en tableau tel quel : l'uuid d'acteur (avec ses points) n'est
+   * qu'une VALEUR ici, jamais une clé d'objet — aucun développement de chemin par `expandObject`.
+   * @param {object} entry
+   */
+  async persistTargets(entry) {
+    const msg = game.messages.get(entry.msgId);
+    if (!msg) return;
+    try {
+      await msg.setFlag(MODULE_ID, "targets", entry.targets ?? []);
+    } catch (err) {
+      console.error("[Arthak's Table · Rolls Bar] persistTargets :", err);
     }
   }
 
