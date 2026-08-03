@@ -900,7 +900,7 @@
   font-size: 9px; font-weight: 800; text-transform: uppercase;
   color: #1a0d00; background: #ff7a1a; border-radius: 6px; padding: 0 4px;
 }
-/* Bascule Norm / Crit des dégâts roulés par la barre (ajoute/retire le delta de dés critiques). */
+/* Sélecteur de modificateur des dégâts : Norm / Crit (orange) / Soin (vert). */
 #ats-rolls-bar .rb-crit-ctl { display: inline-flex; align-items: center; gap: 2px; }
 #ats-rolls-bar .rb-crit-seg {
   font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
@@ -908,6 +908,9 @@
 }
 #ats-rolls-bar .rb-crit-seg:hover { color: #fff; border-color: #ff7a1a; }
 #ats-rolls-bar .rb-crit-seg.rb-crit-on { color: #1a0d00; background: #ff7a1a; border-color: #ff7a1a; }
+/* Segment Soin : teinte verte (survol + actif), distincte du crit orange. */
+#ats-rolls-bar .rb-crit-seg.rb-mod-heal:hover { border-color: #64d6a0; }
+#ats-rolls-bar .rb-crit-seg.rb-mod-heal.rb-crit-on { color: #06281a; background: #64d6a0; border-color: #64d6a0; }
 
 /* Applicateur : SECTION À PART dans la ligne (voir renderEntry), à droite du résultat dégâts.
    Toggle cible + multiplicateurs (appliquent au clic). Filet séparateur à gauche, comme les
@@ -949,10 +952,6 @@
 #ats-rolls-bar .rb-rd-btn i { font-size: 10px; }
 #ats-rolls-bar .rb-rd-dmg { color: #ffcf9a; border-color: rgba(201, 74, 76, 0.5); background: rgba(201, 74, 76, 0.14); }
 #ats-rolls-bar .rb-rd-dmg:hover { color: #fff; border-color: #ff8c8c; background: rgba(201, 74, 76, 0.3); }
-#ats-rolls-bar .rb-rd-crit { color: #ffd479; border-color: rgba(255, 122, 26, 0.6); background: rgba(255, 122, 26, 0.15); }
-#ats-rolls-bar .rb-rd-crit:hover { color: #fff; border-color: #ff9a4a; background: rgba(255, 122, 26, 0.3); }
-#ats-rolls-bar .rb-rd-heal { color: #9be0b8; border-color: rgba(100, 214, 160, 0.5); background: rgba(100, 214, 160, 0.12); }
-#ats-rolls-bar .rb-rd-heal:hover { color: #fff; border-color: #64d6a0; background: rgba(100, 214, 160, 0.3); }
 
 #ats-rolls-bar .rb-toggle {
   flex: 0 0 auto; display: flex; align-items: center; justify-content: center;

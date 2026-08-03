@@ -336,10 +336,19 @@ export class RollsBar extends FloatingBar {
     if (msg?.author?.id !== game.user.id) return;
 
     entry._autoRolling = true;
-    const crit = this.keptDie(entry.attack)?.value === 20;
-    this.rollBaseDamage(entry, { heal: false })
-      .then((ok) => { if (ok && crit) return this.setCrit(entry, true); })
-      .finally(() => { entry._autoRolling = false; });
+    this.rollDamageFor(entry).finally(() => { entry._autoRolling = false; });
+  }
+
+  /**
+   * Roule les dégâts de base d'une ligne puis applique le crit si le dé gardé est un 20 naturel.
+   * Point d'entrée commun à l'auto-roll (maybeAutoDamage) et au bouton manuel (renderRollDamage) :
+   * un seul lancer, le sens (dégât / soin) et le crit s'ajustent APRÈS via le sélecteur Norm/Crit/
+   * Soin (voir setModifier).
+   * @param {object} entry
+   */
+  async rollDamageFor(entry) {
+    const ok = await this.rollBaseDamage(entry, { heal: false });
+    if (ok && this.keptDie(entry.attack)?.value === 20) await this.setModifier(entry, "crit");
   }
 
   /** Cibles du jet (nom, image, CA) depuis les flags dnd5e du message. */
@@ -691,8 +700,10 @@ export class RollsBar extends FloatingBar {
       row.appendChild(this.renderDamage(entry));
       // Applicateur : SECTION À PART (son propre div), à droite du résultat après un séparateur.
       if (entry.canControl) row.appendChild(this.renderApplyControls(entry));
-    } else if (entry.attack && entry.canControl && entry.activityUuid) {
-      // Dégâts pas encore roulés : boutons de lancer (à la demande, une fois adv/dés figé).
+    } else if (entry.attack && entry.canControl && entry.activityUuid
+      && !game.settings.get(MODULE_ID, "rollsAutoDamage")) {
+      // Auto-roll désactivé : icône de lancer à la demande (l'auto-roll remplit sinon les dégâts
+      // tout seul — pas d'affichage transitoire de cette section).
       row.appendChild(this.renderRollDamage(entry));
     }
 
@@ -894,8 +905,8 @@ export class RollsBar extends FloatingBar {
     }
 
     box.appendChild(summary);
-    // Modificateur SOUS le résultat (comme la ligne d'attaque).
-    if (togglable) box.appendChild(this.renderCritToggle(entry));
+    // Modificateur Norm / Crit / Soin SOUS le résultat (comme la ligne d'attaque).
+    if (togglable) box.appendChild(this.renderModifierControl(entry));
     return box;
   }
 
@@ -915,19 +926,21 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Sélecteur Norm / Crit des dégâts : bascule l'ajout du delta de dés critiques via `setCrit`.
-   * `stopPropagation` pour ne pas déclencher le dépliage du détail (clic sur le résumé parent).
+   * Sélecteur de modificateur des dégâts, 3 états : Norm / Crit / Soin (voir `setModifier`). L'état
+   * courant se dérive de `isHealing` (Soin) et `isCritical` (Crit), sinon Norm.
    * @param {object} entry
    */
-  renderCritToggle(entry) {
+  renderModifierControl(entry) {
+    const dmg = entry.damage;
+    const current = dmg.isHealing ? "heal" : dmg.isCritical ? "crit" : "normal";
     const box = document.createElement("span");
     box.className = "rb-crit-ctl";
-    for (const [on, key] of [[false, "normal"], [true, "crit"]]) {
+    for (const key of ["normal", "crit", "heal"]) {
       const seg = document.createElement("span");
-      seg.className = `rb-crit-seg${!!entry.damage.isCritical === on ? " rb-crit-on" : ""}`;
+      seg.className = `rb-crit-seg rb-mod-${key}${current === key ? " rb-crit-on" : ""}`;
       seg.textContent = t(`ATS.rolls.critToggle.${key}`);
       seg.dataset.tooltip = t(`ATS.rolls.critSet.${key}`);
-      seg.addEventListener("click", (e) => { e.stopPropagation(); this.setCrit(entry, on); });
+      seg.addEventListener("click", () => this.setModifier(entry, key));
       box.appendChild(seg);
     }
     return box;
@@ -967,51 +980,29 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Boutons de lancer des dégâts, affichés tant que les dégâts ne sont pas roulés : ⚔ Dégât
-   * (crit auto si le dé gardé = 20), 💥 Crit (force le crit), 💚 Soin. Chaque bouton roule les
-   * dés de l'activité à la demande.
+   * Icône unique de lancer des dégâts, affichée tant qu'ils ne sont pas roulés ET que l'auto-roll
+   * est désactivé (voir renderEntry). Un clic roule les dégâts de base (crit auto sur un 20
+   * naturel) ; le sens (dégât / soin) et le crit s'ajustent ensuite via le sélecteur Norm/Crit/Soin.
    * @param {object} entry
    */
   renderRollDamage(entry) {
     const box = document.createElement("div");
     box.className = "rb-rolldmg";
-    const nat20 = this.keptDie(entry.attack).value === 20;
 
-    const make = (cls, icon, labelKey, hintKey, opts) => {
-      const b = document.createElement("span");
-      b.className = `rb-rd-btn ${cls}`;
-      const i = document.createElement("i");
-      i.className = `fas ${icon}`;
-      b.appendChild(i);
-      const s = document.createElement("span");
-      s.textContent = t(labelKey);
-      b.appendChild(s);
-      b.dataset.tooltip = t(hintKey);
-      b.addEventListener("click", () => this.rollDamageButton(entry, opts));
-      return b;
-    };
-
-    box.appendChild(make("rb-rd-dmg", "fa-burst", "ATS.rolls.rollDamage", "ATS.rolls.rollDamageHint", { crit: nat20, heal: false }));
-    box.appendChild(make("rb-rd-crit", "fa-explosion", "ATS.rolls.rollCrit", "ATS.rolls.rollCritHint", { crit: true, heal: false }));
-    box.appendChild(make("rb-rd-heal", "fa-heart", "ATS.rolls.rollHeal", "ATS.rolls.rollHealHint", { crit: false, heal: true }));
+    const b = document.createElement("span");
+    b.className = "rb-rd-btn rb-rd-dmg";
+    const i = document.createElement("i");
+    i.className = "fas fa-burst";
+    b.appendChild(i);
+    b.dataset.tooltip = t("ATS.rolls.rollDamageHint");
+    b.addEventListener("click", () => this.rollDamageFor(entry));
+    box.appendChild(b);
     return box;
   }
 
   /**
-   * Dispatcher des boutons de lancer manuels : roule les dégâts de BASE, puis applique le crit si
-   * demandé (bouton « Crit », ou 20 naturel pour le bouton « Dégât »). Passe par le même flux
-   * base + delta que l'auto-roll, si bien que le résultat reste basculable Norm/Crit ensuite.
-   * @param {object} entry
-   * @param {{crit:boolean, heal:boolean}} opts
-   */
-  async rollDamageButton(entry, { crit, heal }) {
-    const ok = await this.rollBaseDamage(entry, { heal });
-    if (ok && crit) await this.setCrit(entry, true);
-  }
-
-  /**
    * Roule les dégâts (ou soins) de BASE de l'activité — jamais critiques : le crit est un DELTA
-   * ajouté ensuite (voir `setCrit`), pour rester basculable sans relancer les dés de base. SANS
+   * ajouté ensuite (voir `setModifier`), pour rester basculable sans relancer les dés de base. SANS
    * carte de chat (create:false), animés en 3D (Dice So Nice), synchronisés via un flag du message.
    * @param {object} entry
    * @param {{heal:boolean}} opts
@@ -1049,41 +1040,56 @@ export class RollsBar extends FloatingBar {
   }
 
   /**
-   * Bascule l'état critique des dégâts déjà roulés APRÈS coup. Passer à crit roule UNE fois les dés
-   * critiques additionnels (un jeu de dés supplémentaire de même composition que les dés de base =
-   * doublement des dés, le bonus plat jamais doublé) et les met en cache ; les révoquer/rétablir ne
-   * fait ensuite qu'ajouter ou retirer ce delta, sans relancer. Ne s'applique qu'aux dégâts roulés
-   * par la barre (présence de `baseParts`).
+   * Applique le modificateur des dégâts déjà roulés APRÈS coup, sélecteur à 3 états :
+   *  - « normal » : dégâts de base ;
+   *  - « crit »   : ajoute le delta de dés critiques (un jeu de dés de même composition que la base
+   *                 = doublement des dés, bonus plat jamais doublé), roulé UNE fois puis mis en
+   *                 cache (basculer n'ajoute/retire que ce delta, sans relancer) ;
+   *  - « heal »   : marque le résultat comme SOIN (appliqué en gain de PV, teinté vert), sans
+   *                 critique — utile en mode auto-roll où l'on ne choisit plus au lancer.
+   * Ne s'applique qu'aux dégâts roulés par la barre (présence de `baseParts`).
    * @param {object} entry  Ligne de la pile.
-   * @param {boolean} on     Vrai = critique, faux = normal.
+   * @param {string} mode   « normal » | « crit » | « heal ».
    */
-  async setCrit(entry, on) {
+  async setModifier(entry, mode) {
     const dmg = entry?.damage;
-    if (!dmg?.baseParts || !!dmg.isCritical === !!on) return;
+    if (!dmg?.baseParts) return;
+    const crit = mode === "crit";
+    const heal = mode === "heal";
+    if (!!dmg.isCritical === crit && !!dmg.isHealing === heal) return;
 
-    if (on && !dmg.critParts) {
-      const critParts = [];
-      for (const part of dmg.baseParts) {
-        const formula = this.critFormulaFor(part);
-        if (!formula) continue; // part sans dé (bonus plat seul) : pas de dé critique
-        let roll;
-        try {
-          roll = await new Roll(formula).evaluate();
-        } catch (err) {
-          console.error("[Arthak's Table · Rolls Bar] dés critiques :", err);
-          continue;
-        }
-        await this.animateRolls([roll]);
-        const { dice, sum } = this.extractDice(roll);
-        critParts.push({ type: part.type, subtotal: sum, formula, dice });
-      }
-      dmg.critParts = critParts;
-    }
-
-    dmg.isCritical = !!on;
+    if (crit) await this.ensureCritDice(entry);
+    dmg.isCritical = crit;
+    dmg.isHealing = heal;
     this.recomputeDamage(dmg);
     this.render();
     this.persistDamage(entry);
+  }
+
+  /**
+   * Roule (une seule fois) et met en cache les dés critiques additionnels sur `dmg.critParts`, à
+   * partir de la composition des dés de base. Sans effet si déjà en cache ou si aucun dé de base.
+   * @param {object} entry
+   */
+  async ensureCritDice(entry) {
+    const dmg = entry?.damage;
+    if (!dmg?.baseParts || dmg.critParts) return;
+    const critParts = [];
+    for (const part of dmg.baseParts) {
+      const formula = this.critFormulaFor(part);
+      if (!formula) continue; // part sans dé (bonus plat seul) : pas de dé critique
+      let roll;
+      try {
+        roll = await new Roll(formula).evaluate();
+      } catch (err) {
+        console.error("[Arthak's Table · Rolls Bar] dés critiques :", err);
+        continue;
+      }
+      await this.animateRolls([roll]);
+      const { dice, sum } = this.extractDice(roll);
+      critParts.push({ type: part.type, subtotal: sum, formula, dice });
+    }
+    dmg.critParts = critParts;
   }
 
   /**
