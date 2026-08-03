@@ -80,7 +80,7 @@ const RollsBarConfig = makeSettingsPanel(
 
 const ControlBarConfig = makeSettingsPanel(
   "ats-controls-config", "ATS.panel.controls.title", "fa-solid fa-toolbox",
-  ["controlsDock", "controlsOrientation", "dockMargin", "controlsButtonSize"],
+  ["controlsDock", "controlsOrientation", "dockMargin", "controlsButtonSize", "controlsTwoLevel"],
 );
 
 const SceneBarConfig = makeSettingsPanel(
@@ -403,6 +403,15 @@ export function registerSettings() {
     hint: "ATS.settings.controlsButtonSize.hint",
     scope: "client", config: false, type: Number, default: 40,
     onChange: () => ControlBar.instance?.applyButtonSize(),
+  });
+
+  // Disposition sur DEUX niveaux (contrôles / outils sur deux rangées parallèles) plutôt
+  // qu'une seule longue piste. Change la structure du DOM → re-rendu complet de la barre.
+  game.settings.register(MODULE_ID, "controlsTwoLevel", {
+    name: "ATS.settings.controlsTwoLevel.name",
+    hint: "ATS.settings.controlsTwoLevel.hint",
+    scope: "client", config: false, type: Boolean, default: true,
+    onChange: () => ControlBar.instance?.render(),
   });
 
   // ── Barre de scènes (panneau SceneBarConfig) ────────────────────────────────

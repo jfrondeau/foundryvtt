@@ -223,6 +223,8 @@
   "ATS.menu.controls.hint": "Floating replica of Foundry's native scene controls, dockable like the suite's other bars.",
   "ATS.settings.controlsButtonSize.name": "Button size (px)",
   "ATS.settings.controlsButtonSize.hint": "Size of the control bar buttons.",
+  "ATS.settings.controlsTwoLevel.name": "Two-level layout",
+  "ATS.settings.controlsTwoLevel.hint": "Lay out the top-level controls and the active control's tools on two parallel rows (stacked when horizontal, side-by-side columns when vertical) instead of one long track.",
   "ATS.controls.label": "Controls",
   "ATS.controls.ready": "Control bar ready.",
   "ATS.controls.activateFail": "Could not activate this control.",

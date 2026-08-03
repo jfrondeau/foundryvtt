@@ -201,6 +201,25 @@
 #scene-controls-bar.fb-vertical { flex-direction: column; align-items: center; }
 #scene-controls-bar.fb-vertical .sc-sep { width: auto; height: 1px; align-self: stretch; margin: 2px; }
 
+/* ── Disposition « 2 niveaux » (réglage controlsTwoLevel) ─────────────────────────
+   Contrôles et outils du contrôle actif sur DEUX rangées parallèles, PERPENDICULAIRES à
+   l'orientation de la barre. Le corps (`sc-body`) porte l'axe perpendiculaire ; chaque
+   rangée (`sc-level`) coule LE LONG de l'orientation. On reproduit la colonne native de
+   Foundry (contrôles + outils côte à côte) sans allonger la barre sur un seul axe. */
+#scene-controls-bar.sc-two-level .sc-body { display: flex; gap: 6px; }
+#scene-controls-bar.sc-two-level .sc-level { display: flex; gap: 6px; }
+/* Horizontal : corps = colonne de 2 rangées ; chaque rangée = ligne de boutons. */
+#scene-controls-bar.sc-two-level.fb-horizontal .sc-body { flex-direction: column; align-items: flex-start; }
+#scene-controls-bar.sc-two-level.fb-horizontal .sc-level { flex-direction: row; align-items: center; }
+/* Vertical : corps = 2 colonnes côte à côte ; chaque colonne = pile de boutons. */
+#scene-controls-bar.sc-two-level.fb-vertical .sc-body { flex-direction: row; align-items: flex-start; }
+#scene-controls-bar.sc-two-level.fb-vertical .sc-level { flex-direction: column; align-items: center; }
+/* En 2 niveaux vertical, le corps fait déjà 2 colonnes (barre assez large) : l'en-tête tient
+   sur UNE ligne horizontale au-dessus, au lieu de s'empiler en colonne — on annule ainsi la
+   règle `.fb-bar.fb-vertical .fb-header` (empilement), pertinente seulement en 1 piste où le
+   contenu vertical n'est qu'une colonne étroite. Gagne en hauteur. */
+#scene-controls-bar.sc-two-level.fb-vertical .fb-header { flex-direction: row; }
+
 /* ╔═══ BARRE DE SCÈNES ════════════════════════════════════════════════════╗ */
 /* ── Réplique flottante de la navigation de scène native (sn-) ─────────────────── */
 /* Coque commune : .fb-bar. Spécificités : onglets TEXTE (pas des icônes carrées) + débordement

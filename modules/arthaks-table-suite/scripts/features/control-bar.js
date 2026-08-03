@@ -103,7 +103,16 @@ export class ControlBar extends FloatingBar {
   }
 
   // ── Construction du contenu (rebâti à chaque changement d'état natif) ────────
-  /** Reconstruit intégralement le DOM de la barre à partir de l'état de `ui.controls`. */
+  /**
+   * Reconstruit intégralement le DOM de la barre à partir de l'état de `ui.controls`.
+   * Deux dispositions, selon le réglage `controlsTwoLevel` :
+   *  - « 1 piste » (défaut) : contrôles · séparateur · outils, tout à la suite le long de
+   *    l'orientation (une seule longue piste) ;
+   *  - « 2 niveaux » : contrôles et outils du contrôle actif sur DEUX rangées parallèles
+   *    perpendiculaires à l'orientation (empilées en horizontal, colonnes côte à côte en
+   *    vertical — comme la colonne native de Foundry). La barre grandit alors sur l'autre
+   *    axe au lieu de s'allonger.
+   */
   render() {
     if (this._destroyed || !this.bar) return;
     this.bar.replaceChildren();
@@ -113,41 +122,94 @@ export class ControlBar extends FloatingBar {
 
     const controls = this.orderedVisible(ui.controls?.controls);
     const activeControl = ui.controls?.control;
-
-    // Groupe 1 — les contrôles top-level (un bouton par contrôle visible).
-    for (const control of controls) {
-      const btn = this.makeButton({
-        icon: control.icon,
-        tooltip: control.title,            // déjà localisé par Foundry
-        active: activeControl?.name === control.name,
-        onClick: (ev) => this.activateControl(control, ev),
-      });
-      this.bar.appendChild(btn);
-    }
-
-    // Groupe 2 — les outils du contrôle actif.
     const tools = this.orderedVisible(activeControl?.tools);
-    if (tools.length) {
-      const sep = document.createElement("div");
-      sep.className = "sc-sep sc-collapsible";
-      this.bar.appendChild(sep);
 
-      for (const tool of tools) {
-        const btn = this.makeButton({
-          icon: tool.icon,
-          tooltip: tool.title,             // déjà localisé par Foundry
-          active: this.isToolActive(tool),
-          toggle: !!tool.toggle,
-          onClick: (ev) => this.activateTool(activeControl, tool, ev),
-        });
-        this.bar.appendChild(btn);
-      }
-    }
+    const twoLevel = game.settings.get(MODULE_ID, "controlsTwoLevel") === true;
+    this.bar.classList.toggle("sc-two-level", twoLevel);
+    if (twoLevel) this.renderTwoLevel(controls, activeControl, tools);
+    else this.renderSingle(controls, activeControl, tools);
 
     this.applyButtonSize();
     // État replié mémorisé posé AVANT applyDock (la disposition tient compte de la taille repliée).
     this.applyCollapsedState();
     this.applyDock();
+  }
+
+  /**
+   * Disposition « 1 piste » : contrôles top-level, puis (si le contrôle actif a des outils)
+   * un séparateur suivi de ses outils — tous enfants directs de la barre, en flux inline.
+   * @param {object[]} controls       Contrôles top-level visibles.
+   * @param {object|undefined} activeControl  Contrôle actif (porte les outils).
+   * @param {object[]} tools          Outils du contrôle actif visibles.
+   */
+  renderSingle(controls, activeControl, tools) {
+    for (const control of controls) this.bar.appendChild(this.makeControlButton(control, activeControl));
+
+    if (tools.length) {
+      const sep = document.createElement("div");
+      sep.className = "sc-sep sc-collapsible";
+      this.bar.appendChild(sep);
+      for (const tool of tools) this.bar.appendChild(this.makeToolButton(activeControl, tool));
+    }
+  }
+
+  /**
+   * Disposition « 2 niveaux » : un corps (`sc-body`) contenant deux rangées (`sc-level`) —
+   * les contrôles top-level, puis les outils du contrôle actif. Le corps se dispose
+   * perpendiculairement à l'orientation (CSS `sc-two-level`) ; chaque rangée coule le long
+   * de l'orientation. La rangée d'outils est omise quand le contrôle actif n'en a aucun.
+   * @param {object[]} controls       Contrôles top-level visibles.
+   * @param {object|undefined} activeControl  Contrôle actif (porte les outils).
+   * @param {object[]} tools          Outils du contrôle actif visibles.
+   */
+  renderTwoLevel(controls, activeControl, tools) {
+    const body = document.createElement("div");
+    body.className = "sc-body sc-collapsible";
+
+    const controlsLevel = document.createElement("div");
+    controlsLevel.className = "sc-level sc-level-controls";
+    for (const control of controls) controlsLevel.appendChild(this.makeControlButton(control, activeControl));
+    body.appendChild(controlsLevel);
+
+    if (tools.length) {
+      const toolsLevel = document.createElement("div");
+      toolsLevel.className = "sc-level sc-level-tools";
+      for (const tool of tools) toolsLevel.appendChild(this.makeToolButton(activeControl, tool));
+      body.appendChild(toolsLevel);
+    }
+
+    this.bar.appendChild(body);
+  }
+
+  /**
+   * Bouton d'un contrôle top-level (bascule le contrôle actif de la scène).
+   * @param {object} control       Descripteur de contrôle de `ui.controls`.
+   * @param {object|undefined} activeControl  Contrôle actif (pour l'état surligné).
+   * @returns {HTMLElement}
+   */
+  makeControlButton(control, activeControl) {
+    return this.makeButton({
+      icon: control.icon,
+      tooltip: control.title,              // déjà localisé par Foundry
+      active: activeControl?.name === control.name,
+      onClick: (ev) => this.activateControl(control, ev),
+    });
+  }
+
+  /**
+   * Bouton d'un outil du contrôle actif (sélection / bascule / action).
+   * @param {object} activeControl  Contrôle actif (délégataire de l'action).
+   * @param {object} tool           Descripteur d'outil de `ui.controls`.
+   * @returns {HTMLElement}
+   */
+  makeToolButton(activeControl, tool) {
+    return this.makeButton({
+      icon: tool.icon,
+      tooltip: tool.title,                 // déjà localisé par Foundry
+      active: this.isToolActive(tool),
+      toggle: !!tool.toggle,
+      onClick: (ev) => this.activateTool(activeControl, tool, ev),
+    });
   }
 
   /**

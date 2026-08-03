@@ -223,6 +223,8 @@
   "ATS.menu.controls.hint": "Réplique flottante des contrôles de scène natifs de Foundry, ancrable comme les autres barres de la suite.",
   "ATS.settings.controlsButtonSize.name": "Taille des boutons (px)",
   "ATS.settings.controlsButtonSize.hint": "Taille des boutons de la barre de contrôles.",
+  "ATS.settings.controlsTwoLevel.name": "Disposition sur 2 niveaux",
+  "ATS.settings.controlsTwoLevel.hint": "Place les contrôles et les outils du contrôle actif sur deux rangées parallèles (empilées à l'horizontale, en colonnes côte à côte à la verticale) plutôt que sur une seule longue piste.",
   "ATS.controls.label": "Contrôles",
   "ATS.controls.ready": "Barre de contrôles prête.",
   "ATS.controls.activateFail": "Impossible d'activer ce contrôle.",
