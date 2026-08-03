@@ -267,7 +267,7 @@ export class CombatOverlay extends FloatingBar {
         const float = this.renderFloatingTargets();
         if (float) body.appendChild(float);
       } else {
-        // Ancien affichage : carte du courant + cibles dans une colonne à droite.
+        // Affichage en colonne : carte du courant + cibles à droite.
         const detail = this.renderDetail(visible, markerId);
         if (detail) body.appendChild(detail);
       }
@@ -377,7 +377,7 @@ export class CombatOverlay extends FloatingBar {
    * Contrôles de mise en place (MJ) : boutons icônes sur une ligne (tooltip).
    * Avant le combat : rouler l'init des monstres + Commencer. En cours de combat (mode
    * préparation), on ajoute le dé actif pour REVENIR au combat (symétrique du dé de la
-   * ligne d'actions) — l'ancien bouton ⋮ de bascule n'existe plus.
+   * ligne d'actions).
    */
   renderSetupControls() {
     if (!game.user.isGM) return null;
@@ -611,7 +611,7 @@ export class CombatOverlay extends FloatingBar {
     this.positionFloatingTargets();
   }
 
-  /** Carte du combattant courant : grand portrait + nom + stats (remplace le spotlight). */
+  /** Carte du combattant courant : grand portrait + nom + stats. */
   renderCurrentCard(c) {
     const card = document.createElement("div");
     card.className = "co-card co-current-card";

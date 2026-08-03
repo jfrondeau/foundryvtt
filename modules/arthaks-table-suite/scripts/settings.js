@@ -296,7 +296,7 @@ export function registerSettings() {
 
   // Centrage caméra au changement de tour, réglé PAR AUDIENCE (comme le masquage) :
   // chaque client résout la sienne (HideHud.currentAudienceKey) et lit le booléen
-  // correspondant. Remplace l'ancien « autoPanToken » unique (MJ seulement).
+  // correspondant.
   game.settings.register(MODULE_ID, "panCameraGm", {
     name: "ATS.settings.panCameraGm.name",
     hint: "ATS.settings.panCameraGm.hint",

@@ -849,11 +849,11 @@ export class FloatingBar {
    * En-tête commun à toutes les barres : UNE ligne (`fb-header`) regroupant, dans un ordre
    * GARANTI par la classe de base, la poignée (⋮⋮) → la pastille d'identité (icône carrée,
    * titre en tooltip) → les éléments propres à la barre (`extra`) → le bouton de repli.
-   * L'orientation se bascule désormais par clic droit sur la poignée (plus de bouton ↻ visible).
+   * L'orientation se bascule par clic droit sur la poignée.
    * Cette ligne se place EN TÊTE du conteneur, AVANT le contenu de la barre :
    * le repli est donc toujours sur la même ligne que la poignée, avant le contenu. En orientation
    * verticale, l'en-tête reste une ligne horizontale au-dessus du contenu (le conteneur, lui, passe
-   * en colonne). `prefix` ajoute les classes historiques par barre pour la compat CSS.
+   * en colonne). `prefix` ajoute les classes par barre pour la compat CSS.
    * @param {string} prefix        Préfixe CSS de la barre (« ab », « tb », « co », « rb », « sc »).
    * @param {object} opts
    * @param {string} opts.icon     Classe FontAwesome de la pastille d'identité.
