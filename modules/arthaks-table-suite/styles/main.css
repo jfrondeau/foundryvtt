@@ -194,6 +194,52 @@
 #scene-controls-bar.fb-vertical { flex-direction: column; align-items: center; }
 #scene-controls-bar.fb-vertical .sc-sep { width: auto; height: 1px; align-self: stretch; margin: 2px; }
 
+/* ╔═══ BARRE DE SCÈNES ════════════════════════════════════════════════════╗ */
+/* ── Réplique flottante de la navigation de scène native (sn-) ─────────────────── */
+/* Coque commune : .fb-bar. Spécificités : onglets TEXTE (pas des icônes carrées) + débordement
+   scrollable (beaucoup de scènes possibles → la barre défile, cf. constrainSize). */
+#scene-nav-bar { --sn-size: 28px; overflow: auto; }
+
+#scene-nav-bar .sn-handle {
+  flex: 0 0 auto; cursor: grab; color: #aaa; touch-action: none;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#scene-nav-bar .sn-handle:hover { color: #fff; }
+#scene-nav-bar .sn-handle:active { cursor: grabbing; color: #ff6400; }
+
+/* Onglet de scène — pastille texte, hauteur pilotée par --sn-size. */
+#scene-nav-bar .sn-btn {
+  display: flex; align-items: center; flex: 0 0 auto;
+  height: var(--sn-size); max-width: 180px; padding: 0 10px; color: #eee;
+  border: 2px solid #555; border-radius: 4px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); transition: all .1s ease;
+  font-size: calc(var(--sn-size) * 0.5);
+}
+#scene-nav-bar .sn-btn:hover {
+  border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.12);
+  color: #fff; transform: translateY(-2px);
+}
+/* Nom de scène : tronqué si trop long (le tooltip porte le nom complet). */
+#scene-nav-bar .sn-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+
+/* Scène VUE par ce client — orange, comme l'onglet natif surligné. */
+#scene-nav-bar .sn-btn.sn-active {
+  border-color: #ff6400; background: rgba(255, 100, 0, 0.3); color: #fff;
+}
+/* Scène ACTIVE globalement (activée par le MJ pour toute la table) — pastille verte à gauche. */
+#scene-nav-bar .sn-btn.sn-current::before {
+  content: ""; flex: 0 0 auto; width: 7px; height: 7px; margin-right: 6px;
+  border-radius: 50%; background: #46b946; box-shadow: 0 0 4px #46b946;
+}
+
+/* ── État minimisé : poignée + pastille d'identité + toggle ──────────────────── */
+#scene-nav-bar.sn-collapsed { gap: 4px; padding: 3px 5px; }
+#scene-nav-bar.sn-collapsed .sn-collapsible { display: none; }
+
+/* ── Orientation verticale (ancrage gauche / droite) ──────────────────────────── */
+#scene-nav-bar.fb-vertical { flex-direction: column; align-items: stretch; }
+#scene-nav-bar.fb-vertical .sn-btn { max-width: none; justify-content: center; }
+
 /* ╔═══ SUIVI DE COMBAT ════════════════════════════════════════════════════╗ */
 /* ── Overlay de combat — layout « Rail » ─────────────────────────────────────── */
 #combat-overlay {
@@ -517,6 +563,32 @@
 #combat-overlay input.co-hp-edit:focus { border-color: #ff8c8c; outline: none; background: rgba(0, 0, 0, 0.7); }
 #combat-overlay input.co-hp-edit::placeholder { color: #a88; font-weight: 400; font-size: 11px; }
 
+/* ── Champ PV flottant HORS combat (raccourci « / ») ───────────────────────────
+   Petite boîte ancrée au-dessus du token sélectionné (position: fixed, coordonnées
+   écran posées en JS). Reprend l'allure du champ PV du panneau de combat. */
+#ats-hp-quick {
+  position: fixed; z-index: 70; pointer-events: auto;
+  transform: translate(-50%, calc(-100% - 12px)); /* au-dessus du centre du token */
+  display: flex; flex-direction: column; gap: 3px; align-items: stretch;
+  min-width: 128px; padding: 6px;
+  background: rgba(14, 16, 22, 0.92);
+  border: 1px solid rgba(255, 126, 126, 0.5); border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+}
+#ats-hp-quick .ats-hp-quick-caption {
+  color: #ffd0d0; font-size: 11px; font-weight: 600; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+}
+#ats-hp-quick input.ats-hp-quick-input {
+  width: 100%; height: 26px; padding: 0 4px;
+  color: #fff; background: rgba(0, 0, 0, 0.5);
+  border: 2px solid #ff7e7e; border-radius: 4px;
+  text-align: center; font-weight: 700; font-size: 15px;
+}
+#ats-hp-quick input.ats-hp-quick-input:focus { border-color: #ff8c8c; outline: none; background: rgba(0, 0, 0, 0.7); }
+#ats-hp-quick input.ats-hp-quick-input::placeholder { color: #a88; font-weight: 400; font-size: 11px; }
+
 /* Panneau cible FLOTTANT (mode « courant en place ») : hors flux, ancré au root
    (position: fixed), donc non clippé par le rail. Fond opaque propre pour la
    lisibilité au-dessus de la carte (la colonne .co-detail ne l'englobe plus). */
@@ -654,13 +726,15 @@
 #combat-overlay .fb-handle,
 #selected-token-actions .fb-handle,
 #ats-rolls-bar .fb-handle,
-#scene-controls-bar .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
+#scene-controls-bar .fb-handle,
+#scene-nav-bar .fb-handle { padding: 0 4px; font-size: 14px; line-height: 1; }
 
 #spell-template-bar .fb-toggle,
 #combat-overlay .fb-toggle,
 #selected-token-actions .fb-toggle,
 #ats-rolls-bar .fb-toggle,
-#scene-controls-bar .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
+#scene-controls-bar .fb-toggle,
+#scene-nav-bar .fb-toggle { width: 22px; height: 22px; border-radius: 4px; font-size: 12px; }
 
 /* ── État minimisé : poignée + pastille d'identité + toggle ────────────────────── */
 #selected-token-actions.ab-collapsed { gap: 4px; padding: 3px 5px; }

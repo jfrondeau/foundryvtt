@@ -1,11 +1,17 @@
 /**
- * Scene Controls Bar — Module Foundry VTT v14 · Système dnd5e 5.x
+ * Control Bar — Module Foundry VTT v14 · Système dnd5e 5.x
  *
  * Reproduit les CONTRÔLES DE SCÈNE natifs de Foundry (la colonne de gauche : Token,
  * Murs, Éclairage, Tuiles, Dessins, Sons, Regions, Notes… + les outils du contrôle
  * actif) dans une barre flottante de la suite, afin qu'ils bénéficient du même docking
  * (bord + ancre), du drag, du repli, du mode table et de la persistance par utilisateur
  * que les autres barres.
+ *
+ * NB : la classe s'appelle « ControlBar » (barre de contrôles) — c'est la première barre
+ * à remplacer un élément d'interface natif de Foundry. Le nom « Scene control » est
+ * réservé à une barre à venir. Ses clés internes (barKey « controls », réglages
+ * « controls… », id « #scene-controls-bar », préfixe CSS « sc ») restent historiques
+ * pour préserver la persistance côté client.
  *
  * La barre ne DUPLIQUE PAS la logique de Foundry : chaque bouton délègue au moteur natif
  * via l'API `ui.controls` (comme SpellTemplateBar le fait déjà pour le mode gabarit) :
@@ -18,8 +24,9 @@
  * toggle — que `renderSceneControls` ne déclenche pas, le natif ne touchant alors qu'`aria-pressed`).
  *
  * Comme l'activation passe par l'API (et non par un clic DOM), la barre reste pleinement
- * fonctionnelle même quand la colonne native est masquée (matrice de masquage, entrée
- * « sceneControls »). Elle la remplace donc entièrement.
+ * fonctionnelle même quand la colonne native est masquée. Elle la remplace donc entièrement :
+ * `replacesNativeSelector` déclare la colonne native, que HideHud masque automatiquement sur
+ * tout client où cette barre tourne (cf. HideHud.applyNativeReplacements).
  *
  * Interaction de la barre :
  *  - Clic gauche sur un contrôle → bascule le contrôle actif de la scène.
@@ -38,8 +45,15 @@ const notify = makeNotify("Contrôles");
 // ═══════════════════════════════════════════════════════════════════════════════
 // BARRE
 // ═══════════════════════════════════════════════════════════════════════════════
-export class SceneControlsBar extends FloatingBar {
+export class ControlBar extends FloatingBar {
   static instance = null;
+
+  /**
+   * Sélecteur de l'élément d'interface NATIF que cette barre remplace. Tant qu'une
+   * instance de la barre tourne sur ce client, HideHud masque ce natif automatiquement
+   * (pas besoin de le cocher dans la matrice de masquage). Cf. HideHud.applyNativeReplacements.
+   */
+  static replacesNativeSelector = "#controls, #scene-controls";
 
   /** Instancie et affiche la barre (idempotent). Démarrée par la matrice de masquage. */
   static start() {

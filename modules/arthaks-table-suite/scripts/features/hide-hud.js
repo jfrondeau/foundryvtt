@@ -106,12 +106,12 @@ export const HIDE_DEFAULTS = {
   gm: {},
   tv: Object.fromEntries(
     ["navigation", "sceneControls", "logo", "players", "hotbar", "chatInput", "chatMenu",
-      "bar-controls", ...TAB_KEYS]
+      "bar-controls", "bar-scene", ...TAB_KEYS]
       .map((k) => [k, true]),
   ),
-  // La barre des contrôles de scène est réservée au MJ (murs, éclairage, tuiles… lui sont
-  // propres) : masquée par défaut pour les autres joueurs.
-  others: { "bar-controls": true },
+  // Barres réservées au MJ : la barre de contrôles (murs, éclairage, tuiles…) et la barre de
+  // scènes (navigation entre scènes) lui sont propres — masquées par défaut pour les autres joueurs.
+  others: { "bar-controls": true, "bar-scene": true },
 };
 
 export class HideHud {
@@ -181,7 +181,30 @@ export class HideHud {
       if (hidden) b.cls.instance?.destroy();
       else if (!b.cls.instance) b.cls.start();
     }
+    this.applyNativeReplacements();
     FloatingBar.layoutAll();
+  }
+
+  /**
+   * Masquage AUTOMATIQUE des éléments d'interface natifs remplacés par une barre de la suite.
+   * Une barre peut déclarer, via la statique `replacesNativeSelector`, l'élément natif qu'elle
+   * reproduit (ex. la barre de contrôles remplace la colonne native `#controls, #scene-controls`).
+   * Tant qu'une telle barre TOURNE sur ce client, on masque son natif — inutile de le cocher dans
+   * la matrice. Recalculé à chaque réconciliation (une barre démarrée / détruite change le résultat)
+   * via la feuille de style dédiée « #ats-native-replaced ». Indépendant du masquage manuel de la
+   * matrice, qui reste utile là où la barre ne tourne PAS (ex. écran de table sans barre de contrôles).
+   */
+  static applyNativeReplacements() {
+    let style = document.getElementById("ats-native-replaced");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "ats-native-replaced";
+      document.head.appendChild(style);
+    }
+    const selectors = BARS
+      .filter((b) => b.cls.instance && b.cls.replacesNativeSelector)
+      .map((b) => b.cls.replacesNativeSelector);
+    style.textContent = selectors.length ? `${selectors.join(",\n")} { display: none !important; }` : "";
   }
 
   /**

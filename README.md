@@ -1,28 +1,21 @@
-Shortcut pour les principaux outil
-    Selection
-    Selection cible
-    Region ? ou liste objet de type région ? Encore bon depuis que l'on a la poubelle ?
-
-Facilité le target de zone. Actuellement shift + t, ou outils de sélection target (ajouter un shortcut) 
-
-
 # Pourquoi
 
 DM a deja beaucoup a faire, il veut que l'outil l'aide, pas ajouter du travail.
-Manipulation par clavier, pas de place pour une souris!
+Manipulation par clavier, avec raccourci clavier où c'est important
+Mode screen mirroir
+Interface modifiable: barre dockable, élément masquable. Vue ajustable pour MJ, Screen ou player.
 
-Moins de gestion possible des pv en combat, et avoir les action dynamiquement a porter de main pour les monstre. 
+Rapidité des combat: Combat bar compacte, roll init ou entré manuel facile, token bar pour voir et executer l'action, roll bar pour afficher le résutat (tooltip partout), application des dégat auto ou avec un raccourci si roulé en physique. 
 
-Avoir une vue Table, ou les joueur peuvent dessigner les gabarit de sort et déplacer leur personnage. Voir un combat tracker et un chat minimum.
+Ajustement des pv facile avec une seule touche.
+
+
 
 
 # Todo
 
-pouvoir utiliser le shortcut / pour ajuster hp hors combat
-acces au setting pour la vue PJ.
-
-# Idées à ajouter
-
-- Raccourci clavier pour **sélectionner un outil** (sans la souris).
-- **Téléportation au clic** : sélectionner un ou plusieurs tokens, maintenir une touche raccourci, puis cliquer sur la carte → les tokens sont déplacés **immédiatement** à destination, sans animation de trajet ni blocage par les murs.
+- pouvoir utiliser le shortcut / pour ajuster hp hors combat
 - **Miroir sur 3 côtés** pour le « show to player » : étendre le mode table (aujourd'hui un seul coin opposé) à trois bords, pour les joueurs assis sur trois côtés de la table.
+- combiner gabarit de sort avec auto select des monstres qui sont dans la zone.
+- rouler un jet de sauvegarde de toutes les target avant d'appliquer un dégat, et ajuster le dégat en conséquence.
+- roll bar, auto roll damage, ajustement crit par la suite.

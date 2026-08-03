@@ -17,7 +17,8 @@ import { SpellTemplateBar } from "./features/template-bar.js";
 import { CombatOverlay } from "./features/combat-bar.js";
 import { TokenActionBar } from "./features/token-bar.js";
 import { RollsBar } from "./features/rolls-bar.js";
-import { SceneControlsBar } from "./features/controls-bar.js";
+import { ControlBar } from "./features/control-bar.js";
+import { SceneBar } from "./features/scene-bar.js";
 import { TokenTeleport } from "./features/teleport.js";
 import { HideHud, HideConfig, HIDE_DEFAULTS } from "./features/hide-hud.js";
 import { makeSettingsPanel } from "./lib/settings-panel.js";
@@ -77,9 +78,14 @@ const RollsBarConfig = makeSettingsPanel(
   ["rollsDock", "rollsOrientation", "dockMargin", "rollsSkipDialog", "rollsMaxEntries"],
 );
 
-const ControlsBarConfig = makeSettingsPanel(
+const ControlBarConfig = makeSettingsPanel(
   "ats-controls-config", "ATS.panel.controls.title", "fa-solid fa-toolbox",
   ["controlsDock", "controlsOrientation", "dockMargin", "controlsButtonSize"],
+);
+
+const SceneBarConfig = makeSettingsPanel(
+  "ats-scene-config", "ATS.panel.scene.title", "fa-solid fa-compass",
+  ["sceneDock", "sceneOrientation", "dockMargin", "sceneButtonSize"],
 );
 
 /**
@@ -103,9 +109,13 @@ const BAR_MENUS = new Map([
     menuKey: "rollsBarMenu", panel: RollsBarConfig, icon: "fa-solid fa-dice-d20",
     label: "ATS.menu.rolls.label", hint: "ATS.menu.rolls.hint",
   }],
-  [SceneControlsBar, {
-    menuKey: "controlsBarMenu", panel: ControlsBarConfig, icon: "fa-solid fa-toolbox",
+  [ControlBar, {
+    menuKey: "controlsBarMenu", panel: ControlBarConfig, icon: "fa-solid fa-toolbox",
     label: "ATS.menu.controls.label", hint: "ATS.menu.controls.hint",
+  }],
+  [SceneBar, {
+    menuKey: "sceneBarMenu", panel: SceneBarConfig, icon: "fa-solid fa-compass",
+    label: "ATS.menu.scene.label", hint: "ATS.menu.scene.hint",
   }],
 ]);
 
@@ -381,18 +391,32 @@ export function registerSettings() {
     onChange: () => { RollsBar.instance?.trim(); reRenderRolls(); },
   });
 
-  // ── Barre des contrôles de scène (panneau ControlsBarConfig) ────────────────
+  // ── Barre de contrôles (panneau ControlBarConfig) ───────────────────────────
   // Défaut ancré au bord gauche, vertical, comme la colonne native qu'elle remplace.
   registerDock("controlsDock", "ATS.dock.name", "left",
-    () => SceneControlsBar.instance?.applyDock());
+    () => ControlBar.instance?.applyDock());
   registerOrientation("controlsOrientation",
-    () => SceneControlsBar.instance?.applyDock(), "v");
+    () => ControlBar.instance?.applyDock(), "v");
 
   game.settings.register(MODULE_ID, "controlsButtonSize", {
     name: "ATS.settings.controlsButtonSize.name",
     hint: "ATS.settings.controlsButtonSize.hint",
     scope: "client", config: false, type: Number, default: 40,
-    onChange: () => SceneControlsBar.instance?.applyButtonSize(),
+    onChange: () => ControlBar.instance?.applyButtonSize(),
+  });
+
+  // ── Barre de scènes (panneau SceneBarConfig) ────────────────────────────────
+  // Défaut ancré au bord haut, horizontal, comme la navigation native qu'elle remplace.
+  registerDock("sceneDock", "ATS.dock.name", "top",
+    () => SceneBar.instance?.applyDock());
+  registerOrientation("sceneOrientation",
+    () => SceneBar.instance?.applyDock(), "h");
+
+  game.settings.register(MODULE_ID, "sceneButtonSize", {
+    name: "ATS.settings.sceneButtonSize.name",
+    hint: "ATS.settings.sceneButtonSize.hint",
+    scope: "client", config: false, type: Number, default: 28,
+    onChange: () => SceneBar.instance?.applyButtonSize(),
   });
 
   // ── Masquage de l'interface par AUDIENCE (matrice, scope monde) ─────────────
@@ -452,6 +476,7 @@ export function registerSettings() {
     migrate("templateDock", "templateOrientation");
     migrate("combatDock", "combatOrientation");
     migrate("controlsDock", "controlsOrientation");
+    migrate("sceneDock", "sceneOrientation");
 
     // Migration de l'état d'ancrage localStorage : { pos (fraction), seq } → { align, order }.
     // L'ancre est dérivée de la fraction (tiers) ; l'ordre reprend le rang d'arrivée.
@@ -465,7 +490,7 @@ export function registerSettings() {
       const order = Number.isFinite(Number(state.seq)) ? Number(state.seq) : Date.now();
       localStorage.setItem(lsKey, JSON.stringify({ align, order }));
     };
-    ["template", "combat", "token", "controls"].forEach(migrateDockState);
+    ["template", "combat", "token", "controls", "scene"].forEach(migrateDockState);
   });
 
   // Migration du centrage caméra : ancien réglage monde unique « autoPanToken » (MJ
