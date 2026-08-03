@@ -10,10 +10,14 @@
  * « combat », « token ») : comme toutes partagent le même MODULE_ID, c'est elle qui
  * évite la collision des clés localStorage de position/minimisation entre barres.
  *
- * ANCRAGE — règle unique : une barre docke sur un BORD (top/bottom/left/right) puis
- * coule LE LONG de ce bord selon son ANCRE discrète (start | center | end), en séquence
- * d'arrivée (`order`). Les barres d'un même (bord, ancre) se rangent bout à bout, JAMAIS
- * l'une par-dessus l'autre. Voir `layoutAll`.
+ * ANCRAGE — grille 2D par bord. Une barre docke sur un BORD (top/bottom/left/right), puis
+ * se place selon DEUX axes discrets :
+ *   • LE LONG du bord  → ANCRE `start | center | end` ;
+ *   • EN PROFONDEUR    → RANGÉE `row` (0 = collée au bord, 1 = empilée par-dessus, …).
+ * Dans une même cellule (bord, ancre, rangée), les barres coulent bout à bout par rang
+ * d'arrivée (`order`), JAMAIS l'une par-dessus l'autre. Ainsi deux barres « bottom-center »
+ * peuvent s'empiler verticalement en restant toutes deux centrées (rangées 0 et 1). Voir
+ * `layoutAll` / `_layoutEdge`.
  */
 import { MODULE_ID } from "../const.js";
 import { t } from "./common.js";
@@ -169,11 +173,13 @@ export class FloatingBar {
       handle.setPointerCapture(ev.pointerId);
       let candidate = null;  // bord visé
       let align = null;      // ancre visée (start | center | end)
+      let row = null;        // rangée visée (profondeur perpendiculaire au bord)
       let engaged = null;    // bord « collant » engagé (hystérésis anti-bascule au coin)
       const onMove = (e) => {
         this.setPos(e.clientX - offX, e.clientY - offY); // suit le pointeur
         candidate = null;
         align = null;
+        row = null;
         if (this.dockSettingKey) {
           const nearEdge = this.dockCandidateAt(e.clientX, e.clientY); // bord d'écran sous le pointeur
           if (engaged && nearEdge !== null) {
@@ -184,9 +190,14 @@ export class FloatingBar {
           } else {
             candidate = engaged = null; // revenu au centre → libre
           }
-          if (candidate) align = this._alignAt(candidate, e.clientX, e.clientY);
+          if (candidate) {
+            align = this._alignAt(candidate, e.clientX, e.clientY);
+            // Rangée déduite de la PROFONDEUR du pointeur : collé au bord → rejoint la rangée
+            // existante (flux le long du bord) ; plus loin → nouvelle rangée empilée.
+            row = this._rowAt(candidate, align, e.clientX, e.clientY);
+          }
         }
-        this.showDropzone(candidate, align);
+        this.showDropzone(candidate, align, row);
       };
       const onUp = () => {
         handle.releasePointerCapture(ev.pointerId);
@@ -194,9 +205,9 @@ export class FloatingBar {
         handle.removeEventListener("pointerup", onUp);
         this.hideDropzone();
         if (candidate) {
-          // Ancre discrète (start|center|end) + rang d'arrivée : la disposition range les
-          // barres le long du bord, sans jamais les superposer.
-          this.writeDockState({ align: align ?? "center", order: FloatingBar.nextSeq() });
+          // Cellule (ancre × rangée) + rang d'arrivée : la disposition range les barres dans la
+          // grille du bord, le long de l'ancre et empilées par rangée, sans jamais les superposer.
+          this.writeDockState({ align: align ?? "center", row: row ?? 0, order: FloatingBar.nextSeq() });
           this.setEdge(candidate);
         } else {
           // Lâchée au centre : mode libre, position courante mémorisée.
@@ -214,9 +225,10 @@ export class FloatingBar {
   //   • BORD  (`dockSettingKey`)              : « free » | top | bottom | left | right.
   //   • ORIENTATION (`orientSettingKey`, opt.) : « h » | « v », bascule via le bouton ↻.
   //     Sans clé d'orientation, l'orientation est DÉDUITE du bord (gauche/droite → vertical).
-  // La POSITION le long du bord est une ANCRE discrète (start | center | end) + un rang
-  // d'arrivée (`order`), mémorisés en localStorage (posés au glisser). Les barres sans
-  // `dockSettingKey` restent toujours libres.
+  // La POSITION dans le bord est une CELLULE discrète : ancre (start | center | end) LE LONG
+  // du bord × rangée (`row`, entier ≥ 0) EN PROFONDEUR + un rang d'arrivée (`order`) au sein de
+  // la cellule, mémorisés en localStorage (posés au glisser). Les barres sans `dockSettingKey`
+  // restent toujours libres.
   get dockSettingKey() { return null; }
   get orientSettingKey() { return null; }
   get defaultEdge() { return "free"; }
@@ -265,7 +277,9 @@ export class FloatingBar {
     const a = this.readDockState().align;
     return (a === "start" || a === "center" || a === "end") ? a : "center";
   }
-  /** Rang d'arrivée : ordonne les barres d'un même (bord, ancre). Plus petit = placé d'abord. */
+  /** Rangée (profondeur perpendiculaire au bord) : 0 = collée au bord, 1 = empilée par-dessus, … */
+  getRow() { const r = this.readDockState().row; return Number.isInteger(r) && r >= 0 ? r : 0; }
+  /** Rang d'arrivée : ordonne les barres d'une même cellule (bord, ancre, rangée). Plus petit = d'abord. */
   getOrder() { const o = this.readDockState().order; return Number.isFinite(o) ? o : 0; }
   _ensureOrder() { if (!Number.isFinite(this.readDockState().order)) this.writeDockState({ order: FloatingBar.nextSeq() }); }
 
@@ -389,7 +403,7 @@ export class FloatingBar {
       for (const b of visible) {
         if (!b.isDocked()) continue;
         b._ensureOrder();
-        placements.push({ bar: b, edge: b.getEdge(), align: b.getAlign(), order: b.getOrder() });
+        placements.push({ bar: b, edge: b.getEdge(), align: b.getAlign(), row: b.getRow(), order: b.getOrder() });
       }
       FloatingBar._positionEdges(placements);
 
@@ -411,51 +425,95 @@ export class FloatingBar {
   /**
    * Positionne les placements ancrés. Les bords horizontaux (top/bottom) sont posés d'abord,
    * pleine largeur (ils possèdent les coins) ; les bords verticaux (left/right) cèdent au coin
-   * en rétrécissant leur étendue de la bande horizontale, pour ne jamais recouvrir une barre
-   * de coin.
+   * en rétrécissant leur étendue de la bande horizontale (épaisseur TOTALE des rangées empilées),
+   * pour ne jamais recouvrir une barre de coin.
    */
   static _positionEdges(placements) {
-    const W = FloatingBar.usableRight(), H = window.innerHeight, m = FloatingBar.margin();
+    const H = window.innerHeight, m = FloatingBar.margin();
     const byEdge = { top: [], bottom: [], left: [], right: [] };
     for (const p of placements) (byEdge[p.edge] ??= []).push(p);
-    const thickness = (p, horiz) => (horiz ? p.bar.el.offsetHeight : p.bar.el.offsetWidth);
 
     let topBand = 0, botBand = 0;
     for (const edge of ["top", "bottom"]) {
       const list = byEdge[edge];
       if (!list.length) continue;
-      FloatingBar._layoutEdgeGroups(list, edge, 0, W, m, (p, parCoord) => {
-        const h = p.bar.el.offsetHeight, w = p.bar.el.offsetWidth;
-        let y = edge === "top" ? m : H - h - m;
-        if (edge === "bottom") {
-          const hb = document.getElementById("hotbar")?.getBoundingClientRect();
-          if (hb && hb.width && parCoord < hb.right && parCoord + w > hb.left) y = hb.top - h - m;
-        }
-        p.bar.setPos(parCoord, y, m);
-      });
-      const band = Math.max(0, ...list.map((p) => thickness(p, true))) + 2 * m;
+      const band = FloatingBar._layoutEdge(list, edge, 0, FloatingBar.usableRight(), m);
       if (edge === "top") topBand = band; else botBand = band;
     }
 
     for (const edge of ["left", "right"]) {
       const list = byEdge[edge];
       if (!list.length) continue;
-      FloatingBar._layoutEdgeGroups(list, edge, topBand, H - botBand, m, (p, parCoord) => {
-        const w = p.bar.el.offsetWidth;
-        const x = edge === "left" ? m : W - w - m;
-        p.bar.setPos(x, parCoord, m);
-      });
+      FloatingBar._layoutEdge(list, edge, topBand, H - botBand, m);
     }
   }
 
   /**
-   * Dispose les placements d'un même bord dans ses 3 lots d'ancre le long de l'étendue
-   * [p0, p1] : `start` coule depuis p0, `end` recule depuis p1, `center` centré en bloc.
-   * `place(p, parCoord)` reçoit la coordonnée parallèle du coin avant de chaque barre.
+   * Coordonnée de référence du bord = côté PROCHE de la rangée 0 (là d'où la profondeur `d`
+   * s'accumule). En bas, la référence remonte au-dessus de la hotbar quand la barre la survole,
+   * pour ne jamais la recouvrir. `[from, to]` = étendue de la barre le long du bord (test hotbar) ;
+   * passer un point (from = to) suffit pendant le glisser.
    */
-  static _layoutEdgeGroups(list, edge, p0, p1, gap, place) {
+  static _edgeRef(edge, from, to = from) {
+    const W = FloatingBar.usableRight(), H = window.innerHeight, m = FloatingBar.margin();
+    if (edge === "top" || edge === "left") return m;
+    if (edge === "right") return W - m;
+    const hb = document.getElementById("hotbar")?.getBoundingClientRect();
+    if (hb && hb.width && from < hb.right && to > hb.left) return hb.top;
+    return H - m; // bord bas, hors hotbar
+  }
+
+  /**
+   * Dispose les barres d'UN bord sur sa grille 2D. D'abord regroupées par RANGÉE (empilement
+   * perpendiculaire : rangée 0 collée au bord, chaque rangée suivante décalée vers l'intérieur de
+   * l'épaisseur max de la précédente) ; puis, dans chaque rangée, coulées LE LONG du bord par
+   * lots d'ancre (start|center|end) et rang d'arrivée. Retourne l'épaisseur totale occupée
+   * (cession de coin des bords verticaux).
+   */
+  static _layoutEdge(list, edge, p0, p1, gap) {
     const horiz = edge === "top" || edge === "bottom";
-    const size = (p) => (horiz ? p.bar.el.offsetWidth : p.bar.el.offsetHeight);
+    const along = (p) => (horiz ? p.bar.el.offsetWidth : p.bar.el.offsetHeight);
+    const thick = (p) => (horiz ? p.bar.el.offsetHeight : p.bar.el.offsetWidth);
+
+    const rows = new Map();
+    for (const p of list) { if (!rows.has(p.row)) rows.set(p.row, []); rows.get(p.row).push(p); }
+    const rowKeys = [...rows.keys()].sort((a, b) => a - b);
+
+    // Décalage cumulé de chaque rangée depuis le bord + épaisseur totale de la pile.
+    const depth = new Map();
+    let acc = 0, band = 0;
+    for (const r of rowKeys) {
+      depth.set(r, acc);
+      const t = Math.max(0, ...rows.get(r).map(thick));
+      band = Math.max(band, acc + t);
+      acc += t + gap;
+    }
+
+    for (const r of rowKeys) {
+      const d = depth.get(r);
+      FloatingBar._flowAlong(rows.get(r), p0, p1, gap, along, (p, parCoord) => {
+        const bw = p.bar.el.offsetWidth, bh = p.bar.el.offsetHeight;
+        if (horiz) {
+          const ref = FloatingBar._edgeRef(edge, parCoord, parCoord + bw);
+          const y = edge === "top" ? ref + d : ref - d - bh;
+          p.bar.setPos(parCoord, y, gap);
+        } else {
+          const ref = FloatingBar._edgeRef(edge, parCoord);
+          const x = edge === "left" ? ref + d : ref - d - bw;
+          p.bar.setPos(x, parCoord, gap);
+        }
+      });
+    }
+    return band + 2 * gap;
+  }
+
+  /**
+   * Flux LE LONG du bord d'une seule rangée : ses 3 lots d'ancre sur l'étendue [p0, p1] —
+   * `start` coule depuis p0, `end` recule depuis p1, `center` centré en bloc — chaque lot trié
+   * par rang d'arrivée. `size(p)` = taille de la barre le long du bord ; `place(p, parCoord)`
+   * reçoit la coordonnée parallèle du coin avant de chaque barre.
+   */
+  static _flowAlong(list, p0, p1, gap, size, place) {
     const groups = { start: [], center: [], end: [] };
     for (const p of list) (groups[p.align] ?? groups.center).push(p);
     for (const k of ["start", "center", "end"]) groups[k].sort((a, b) => a.order - b.order);
@@ -591,16 +649,17 @@ export class FloatingBar {
 
   /**
    * Bord candidat sous le pointeur pendant un glisser, sinon null. On retient le bord le PLUS
-   * PROCHE du pointeur (à moins de EDGE px) : au coin, c'est donc le bord dont on est réellement
-   * le plus près. L'orientation ne dépend PLUS du bord (bouton ↻) ; l'ancre le long du bord est
-   * discrète (posée séparément au relâcher).
+   * PROCHE du pointeur, docké s'il est dans la bande d'engagement de ce bord. Cette bande vaut
+   * EDGE px + l'épaisseur de la pile DÉJÀ ancrée au bord : on peut ainsi déposer AU-DESSUS d'une
+   * pile existante (rangée suivante) même loin du bord. L'orientation ne dépend PAS du bord
+   * (bouton ↻) ; ancre et rangée sont posées séparément au relâcher.
    */
   dockCandidateAt(x, y) {
-    const EDGE = 40;
+    const EDGE = 60;
     const W = window.innerWidth, H = window.innerHeight;
     const d = { left: x, right: W - x, top: y, bottom: H - y };
     const [edge, dist] = Object.entries(d).sort((a, b) => a[1] - b[1])[0];
-    return dist <= EDGE ? edge : null;
+    return dist <= EDGE + this._edgeStackDepth(edge) ? edge : null;
   }
 
   /** Ancre discrète (start|center|end) selon la position du pointeur le long du bord. */
@@ -612,24 +671,92 @@ export class FloatingBar {
   }
 
   /**
-   * Affiche la bande de dépôt le long du bord candidat, avec le sous-repère de l'ancre visée
-   * (start|center|end) — le « layout ondrag ».
+   * Rangées DÉJÀ occupées à ce bord par les AUTRES barres ancrées → Map(rangée → épaisseur max
+   * de la rangée, mesurée perpendiculairement au bord). Filtrée par `align` si fourni (une même
+   * ancre partage une pile) ; sinon toutes ancres confondues (pour la bande d'engagement).
    */
-  showDropzone(edge, align = "center") {
+  _occupiedRows(edge, align = null) {
+    const horiz = edge === "top" || edge === "bottom";
+    const rows = new Map();
+    for (const b of FloatingBar.instances) {
+      if (b === this || !b.el || b.el.style.display === "none") continue;
+      if (!b.isDocked() || b.getEdge() !== edge) continue;
+      if (align !== null && b.getAlign() !== align) continue;
+      const r = b.getRow();
+      const t = horiz ? b.el.offsetHeight : b.el.offsetWidth;
+      rows.set(r, Math.max(rows.get(r) ?? 0, t));
+    }
+    return rows;
+  }
+
+  /** Épaisseur totale de la pile ancrée à ce bord (toutes ancres) — approfondit la bande d'engagement. */
+  _edgeStackDepth(edge) {
+    if (!this.dockSettingKey) return 0;
+    const m = FloatingBar.margin();
+    let depth = 0;
+    for (const t of this._occupiedRows(edge).values()) depth += t + m;
+    return depth;
+  }
+
+  /** Profondeur (côté proche) de la rangée `row` à (bord, ancre), d'après les rangées déjà occupées. */
+  _rowDepthFor(edge, align, row) {
+    const rows = this._occupiedRows(edge, align);
+    const m = FloatingBar.margin();
+    let acc = 0;
+    for (let r = 0; r < row; r++) acc += (rows.get(r) ?? 0) + m;
+    return acc;
+  }
+
+  /**
+   * Rangée visée selon la PROFONDEUR du pointeur par rapport au bord : si la profondeur tombe dans
+   * la bande d'une rangée déjà occupée → on la REJOINT (flux le long du bord, côte à côte) ; si
+   * elle dépasse la pile → NOUVELLE rangée empilée par-dessus.
+   */
+  _rowAt(edge, align, x, y) {
+    const m = FloatingBar.margin();
+    const ref = FloatingBar._edgeRef(edge, x);
+    const depth = edge === "top" ? y - ref
+                : edge === "bottom" ? ref - y
+                : edge === "left" ? x - ref
+                : ref - x;
+    const rows = this._occupiedRows(edge, align);
+    const keys = [...rows.keys()].sort((a, b) => a - b);
+    let acc = 0;
+    for (const r of keys) {
+      const far = acc + rows.get(r);
+      if (depth <= far + m / 2) return r; // dans (ou juste avant) cette rangée → la rejoindre
+      acc = far + m;
+    }
+    return keys.length ? keys[keys.length - 1] + 1 : 0; // au-delà de la pile → nouvelle rangée
+  }
+
+  /**
+   * Affiche la zone de dépôt = la CELLULE (ancre × rangée) visée : un tiers le long du bord, à la
+   * profondeur de la rangée cible, épaisse comme cette barre. La bande englobante (fine) rappelle
+   * le bord entier. C'est le « layout ondrag », qui reflète l'emplacement final.
+   */
+  showDropzone(edge, align = "center", row = 0) {
     if (!edge) return this.hideDropzone();
     const zone = (this._dropzone ??= this._makeDropzone());
-    const BAND = 60, horiz = edge === "top" || edge === "bottom";
-    Object.assign(zone.style, { left: "", top: "", right: "", bottom: "", width: "", height: "" });
+    const horiz = edge === "top" || edge === "bottom";
+    const m = FloatingBar.margin();
+    const near = this._rowDepthFor(edge, align, row);
+    const thick = (horiz ? this.el.offsetHeight : this.el.offsetWidth) || 44;
+
+    // Bande-repère du bord entier, assez profonde pour contenir la rangée cible.
+    const BAND = near + thick + 2 * m;
+    Object.assign(zone.style, { left: "", top: "", right: "", bottom: "", width: "", height: "", display: "block" });
     if (horiz) { zone.style.left = "0"; zone.style.width = "100%"; zone.style.height = `${BAND}px`; zone.style[edge] = "0"; }
     else { zone.style.top = "0"; zone.style.height = "100%"; zone.style.width = `${BAND}px`; zone.style[edge] = "0"; }
-    // Sous-repère de l'ancre visée (un tiers de la bande).
+
+    // Cellule visée : tiers le long du bord (ancre) × profondeur de la rangée.
     const slot = (zone._slot ??= zone.appendChild(document.createElement("div")));
     slot.className = "fb-dropzone-slot";
     const at = align === "start" ? "0%" : align === "end" ? "66.6667%" : "33.3333%";
     Object.assign(slot.style, { left: "", top: "", right: "", bottom: "", width: "", height: "" });
-    if (horiz) { slot.style.top = "0"; slot.style.bottom = "0"; slot.style.left = at; slot.style.width = "33.3333%"; }
-    else { slot.style.left = "0"; slot.style.right = "0"; slot.style.top = at; slot.style.height = "33.3333%"; }
-    zone.style.display = "block";
+    slot.style[edge] = `${near}px`;
+    if (horiz) { slot.style.left = at; slot.style.width = "33.3333%"; slot.style.height = `${thick}px`; }
+    else { slot.style.top = at; slot.style.height = "33.3333%"; slot.style.width = `${thick}px`; }
   }
 
   hideDropzone() { if (this._dropzone) this._dropzone.style.display = "none"; }
